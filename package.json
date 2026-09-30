@@ -1,0 +1,16 @@
+{
+  "name": "diaria",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:test": "bash db/test.sh"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^6.0.1"
+  }
+}
