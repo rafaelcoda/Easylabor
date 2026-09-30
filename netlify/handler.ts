@@ -30,10 +30,60 @@ function getApp(): AppHandle | null {
   return cached;
 }
 
+
+const HINTS: Record<string, string> = {
+  '28P01': 'Senha recusada pelo banco: a senha da DATABASE_URL não é a senha atual do banco.',
+  '28000': 'Usuário ou senha recusados pelo banco.',
+  XX000: 'Usuário não encontrado no pooler: use o usuário postgres.<código-do-projeto>.',
+  ENOTFOUND: 'O endereço do servidor não foi encontrado: confira o host da string de conexão.',
+  ENETUNREACH: 'Servidor inalcançável (provável conexão direta só IPv6): use o Transaction pooler, porta 6543.',
+  ECONNREFUSED: 'Conexão recusada: confira host e porta.',
+  ETIMEDOUT: 'Tempo esgotado ao conectar: confira host e porta.',
+  CONNECT_TIMEOUT: 'Tempo esgotado ao conectar: confira host e porta.',
+};
+
+/** Diagnóstico seguro da conexão: nunca devolve senha, usuário completo nem endereço do servidor. */
+async function diagnose(databaseUrl: string): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = { ok: true, configured: true };
+  let u: URL;
+  try {
+    u = new URL(databaseUrl);
+  } catch {
+    return { ...out, url_valid: false, hint: 'A DATABASE_URL não é uma URL válida: confira espaços e caracteres especiais na senha (use só letras e números).' };
+  }
+  out.url_valid = true;
+  out.port = u.port || '5432';
+  out.host_kind = u.hostname.endsWith('.pooler.supabase.com')
+    ? 'pooler'
+    : u.hostname.startsWith('db.') && u.hostname.endsWith('.supabase.co')
+      ? 'direct'
+      : 'other';
+  out.user_has_project_ref = decodeURIComponent(u.username).includes('.');
+  out.password_present = u.password.length > 0;
+
+  const sql = createSql(databaseUrl, { max: 1, prepare: false, connect_timeout: 8, idle_timeout: 2, connection: {} });
+  try {
+    await sql`select 1`;
+    out.db = 'ok';
+  } catch (e) {
+    const err = e as { code?: string; name?: string };
+    out.db = 'error';
+    out.error_code = err.code ?? null;
+    out.error_name = err.name ?? null;
+    out.hint = (err.code && HINTS[err.code]) || 'Erro ao conectar ao banco; veja error_code.';
+  } finally {
+    await sql.end({ timeout: 2 }).catch(() => undefined);
+  }
+  return out;
+}
+
 export async function handle(req: Request): Promise<Response> {
-  const { pathname } = new URL(req.url);
+  const url = new URL(req.url);
+  const { pathname } = url;
   if (pathname === '/health') {
-    return json(200, { ok: true, configured: Boolean(Netlify.env.get('DATABASE_URL')) });
+    const databaseUrl = Netlify.env.get('DATABASE_URL');
+    if (databaseUrl && url.searchParams.get('db') === '1') return json(200, await diagnose(databaseUrl));
+    return json(200, { ok: true, configured: Boolean(databaseUrl) });
   }
   const app = getApp();
   if (!app) {

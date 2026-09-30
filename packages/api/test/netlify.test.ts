@@ -34,4 +34,30 @@ describe('função da Netlify', () => {
     const priv = await get('/v1/bookings');
     expect(priv.status).toBe(401);
   });
+
+  it('diagnóstico do /health?db=1 não vaza segredos e mostra o tipo de problema', async () => {
+    const good = process.env.TEST_DATABASE_URL ?? `postgres://root:root@localhost/${TEST_DB}`;
+    env.DATABASE_URL = good;
+    let body = await (await get('/health?db=1')).json();
+    expect(body).toMatchObject({ configured: true, url_valid: true, db: 'ok', host_kind: 'other', password_present: true });
+    expect(JSON.stringify(body)).not.toContain('root:root');
+
+    env.DATABASE_URL = 'postgres://root:senhaerrada@localhost/' + TEST_DB;
+    body = await (await get('/health?db=1')).json();
+    expect(body).toMatchObject({ db: 'error', error_code: '28P01' });
+    expect(body.hint).toMatch(/Senha recusada/);
+    expect(JSON.stringify(body)).not.toContain('senhaerrada');
+
+    env.DATABASE_URL = 'postgres://x:y@host com espaco:99/db';
+    body = await (await get('/health?db=1')).json();
+    expect(body.url_valid).toBe(false);
+
+    env.DATABASE_URL = 'postgres://postgres.abc:segredo@db.abc.supabase.co:5432/postgres';
+    // nada de rede real: só a classificação do endereço importa aqui, por isso usamos um nome que não resolve
+    env.DATABASE_URL = 'postgres://postgres:segredo@db.naoexiste-xyz.supabase.co:5432/postgres';
+    body = await (await get('/health?db=1')).json();
+    expect(body).toMatchObject({ host_kind: 'direct', port: '5432', user_has_project_ref: false, db: 'error' });
+    expect(JSON.stringify(body)).not.toContain('segredo');
+  });
 });
+
