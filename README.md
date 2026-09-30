@@ -14,7 +14,7 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 | `db/migrations` | Esquema PostgreSQL + PostGIS com as 27 tabelas da especificação, travas de integridade (horários sobrepostos, ledger balanceado, tabelas só de inserção). **15 testes SQL passando.** |
 | Banco na nuvem | Projeto **EasyLabor** no Supabase (região São Paulo, `sa-east-1`) com o esquema, o RLS e o seed aplicados. Ver seção abaixo. |
 | `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **27 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
-| `netlify/functions/api.mts` | Entrada da API como função da Netlify. Site `easylabor-api` criado; **publicação pendente** (ver seção Hospedagem). |
+| `netlify/` | Função que expõe a API na Netlify (`handler.ts` + `functions/api.mts`). Site `easylabor-api` ligado ao GitHub. |
 | App (Expo), painel web | Ainda não iniciados (sprints 4 e 5 abaixo). |
 
 ## Banco na nuvem: Supabase (projeto EasyLabor)
@@ -76,7 +76,7 @@ usuário no Supabase Auth. O login por SMS depende de configurar um provedor de 
 | Item | Valor |
 | --- | --- |
 | Site | `easylabor-api` (equipe Apoio, plano Pro), endereço `https://easylabor-api.netlify.app` depois da publicação |
-| Função | `netlify/functions/api.mts`, atendendo `/health` e `/v1/*` |
+| Função | `netlify/functions/api.mts`, atendendo `/health` e `/v1/*`. A lógica fica em `netlify/handler.ts` e o build (`npm run build:functions`) a empacota com esbuild em um único arquivo, porque a Netlify não empacota pacotes do monorepo em TypeScript |
 | Variáveis já definidas | `SUPABASE_URL` e `SUPABASE_ANON_KEY` (chave pública) |
 | Variável que falta | `DATABASE_URL` (secreta) |
 

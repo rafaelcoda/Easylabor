@@ -15,6 +15,6 @@
   "include": [
     "src",
     "test",
-    "../../netlify/functions"
+    "../../netlify/handler.ts"
   ]
 }

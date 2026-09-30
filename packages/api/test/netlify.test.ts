@@ -1,11 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import handler from '../../../netlify/functions/api.mts';
+import { handle } from '../../../netlify/handler';
 import { TEST_DB } from './globalSetup';
 
 const env: Record<string, string | undefined> = {};
 (globalThis as any).Netlify = { env: { get: (k: string) => env[k] } };
-const ctx = {} as any;
-const get = (path: string) => handler(new Request(`http://localhost${path}`), ctx);
+const get = (path: string) => handle(new Request(`http://localhost${path}`));
 
 describe('função da Netlify', () => {
   beforeAll(() => {
