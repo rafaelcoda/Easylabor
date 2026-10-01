@@ -43,6 +43,11 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 - Não colar credenciais em conversas. Se vazar, redefinir na hora.
 - Jurídico: o risco de vínculo trabalhista precisa de parecer antes do lançamento; não mudar regras de preço ou penalidade sem revisar isso.
 
+## Gestão pelo painel
+- Parâmetros de negócio editáveis em `packages/api/src/services/settings.ts` (lista fechada, com limites). Para tornar um novo parâmetro editável, acrescente-o ali e use `ctx.config`.
+- Toda ação do administrador sobre contas, serviços e parâmetros deve gravar em `audit_logs` (função `audit` em `services/manage.ts`).
+- Páginas do painel não podem exportar funções soltas (limitação do Next.js): coloque apoio em `apps/panel/src/lib`.
+
 ## Fotos (Supabase Storage)
 - Bucket privado `booking-photos`; caminho obrigatório `<usuário>/<pedido>/<arquivo>` (função `photoPath` em `packages/client`).
 - O app envia direto ao Supabase com o login do usuário; as políticas em `storage.objects` (migração 0004) decidem quem envia e quem vê. A API só confere, no check-out, que as fotos existem (`verifyPhotoUploads`, ligado em produção).

@@ -13,10 +13,10 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 | `packages/core` | Regras de negócio puras em TypeScript: preço, antecipação, máquina de estados do pedido, cancelamento e no-show, check-in por GPS, ranking, ledger em partidas dobradas, prazos. **44 testes passando.** |
 | `db/migrations` | Esquema PostgreSQL + PostGIS com as 27 tabelas da especificação, travas de integridade (horários sobrepostos, ledger balanceado, tabelas só de inserção). **15 testes SQL passando.** |
 | Banco na nuvem | Projeto **EasyLabor** no Supabase (região São Paulo, `sa-east-1`) com o esquema, o RLS e o seed aplicados. Ver seção abaixo. |
-| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **12 testes passando.** |
+| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **14 testes passando.** |
 | `apps/panel` | Painel web da operação (Next.js). Compila. |
 | `apps/mobile` | App em Expo (cliente e profissional). Tipos ok e empacotamento Android ok; **não testado em aparelho**. |
-| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **92 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
+| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **110 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
 | `netlify/` | Função que expõe a API na Netlify (`handler.ts` + `functions/api.mts`). Site `easylabor-api` ligado ao GitHub. |
 
 
@@ -47,7 +47,10 @@ As faixas de preço das categorias no seed são **placeholders**: substituir pel
 
 Next.js (exportação estática) que fala direto com a API e com o Supabase Auth. Telas: **Painel ao vivo** (indicadores do dia e
 pedidos), **Agenda** (profissionais x pedidos por hora, mais as ofertas aguardando aceite), **Pedidos** (filtros por dia e
-estado) e **Verificação** (aprovar ou reprovar profissionais). Só entra quem tem conta de **admin**.
+estado), **Profissionais** (lista com filtros por verificação, serviço e visibilidade; detalhe com desempenho, advertências, pedidos e
+histórico; aprovar, reprovar, ocultar da busca, suspender e reativar), **Clientes** (lista e detalhe com pedidos, valor contratado e
+suspensão), **Verificação** (fila de aprovação) e **Plataforma** (indicadores e filas de atenção, serviços e faixas de diária,
+parâmetros de negócio editáveis e registro de auditoria). Só entra quem tem conta de **admin**.
 
 - Rodar: `cd apps/panel && npm install && npm run dev` (abre em `http://localhost:3001`).
 - Os endereços públicos (API, Supabase e chave pública) estão em `apps/panel/src/lib/config.ts`. Nenhum segredo.
@@ -100,6 +103,13 @@ Erros seguem o formato `{ error: { code, message, details, request_id } }` da es
 **Ainda não feito na API:** `Idempotency-Key`, reenvio automático ao próximo profissional após recusa ou prazo vencido
 (depende dos jobs da sprint 3), disputa, avaliações, chat, upload de arquivos, cadastro e KYC do profissional,
 antecipação, rotas de admin e webhooks reais do provedor.
+
+**Gestão (painel):** rotas `GET /v1/admin/professionals[/:id]`, `clients[/:id]`, `platform/overview`, `categories`, `config`, `audit`;
+`POST /v1/admin/users/:id/suspend|reactivate`; `PUT /v1/admin/professionals/:id/visible`, `categories/:slug`, `config/:key`;
+`DELETE /v1/admin/config/:key`. **Parâmetros de negócio** (`config_settings`): 12 parâmetros ajustáveis, com limites fixos em
+`services/settings.ts`; a API lê o banco a cada requisição (cache de 20 s), então valem para pedidos novos em até 1 minuto. Toda
+ação de gestão grava em `audit_logs` (quem, o quê, antes e depois, motivo). A chave Pix aparece mascarada e o endereço do
+cliente só com bairro e cidade.
 
 **Disponibilidade da semana:** o profissional marca os dias (um, vários ou todos; 1 = segunda ... 7 = domingo) e o horário. A API
 cria as linhas de `availabilities` dos próximos 28 dias (`source = 'weekly'`) e a rotina de 5 em 5 minutos mantém essa janela

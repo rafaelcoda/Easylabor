@@ -31,6 +31,8 @@ export interface Deps {
   paymentProvider?: PaymentProvider;
   /** Origens de navegador autorizadas a chamar a API (painel web). Vazio = nenhuma. */
   corsOrigins?: string[];
+  /** Lê os parâmetros alterados no painel (tabela config_settings) a cada requisição. Ligado em produção. */
+  dbConfig?: boolean;
   /** Confere no armazenamento do Supabase se as fotos do check-out foram mesmo enviadas. Ligado em produção. */
   verifyPhotoUploads?: boolean;
   /** Rotas de desenvolvimento (simulam webhooks do provedor de pagamentos). Nunca em produção. */

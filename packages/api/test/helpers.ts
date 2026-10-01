@@ -17,7 +17,7 @@ export function makeSql(): Sql {
   });
 }
 
-export function makeApp(sql: Sql, devRoutes = true, paymentProvider?: PaymentProvider, extra: { verifyPhotoUploads?: boolean } = {}) {
+export function makeApp(sql: Sql, devRoutes = true, paymentProvider?: PaymentProvider, extra: { verifyPhotoUploads?: boolean; dbConfig?: boolean } = {}) {
   return createApp({
     sql,
     devRoutes,

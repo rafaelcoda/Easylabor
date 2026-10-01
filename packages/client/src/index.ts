@@ -160,6 +160,86 @@ export const PHOTO_BUCKET = 'booking-photos';
 /** Caminho de uma foto: <usuário que enviou>/<pedido>/<arquivo>. A API e o banco exigem exatamente este formato. */
 export const photoPath = (userId: string, bookingId: string, fileName: string) => `${userId}/${bookingId}/${fileName.replace(/[^A-Za-z0-9._-]/g, '-')}`;
 
+// ------------------------------------------------------------------ gestão (painel da operação)
+export type KycFilter = 'incomplete' | 'pending' | 'approved' | 'rejected';
+export type AccountStatus = 'active' | 'suspended' | 'deleted';
+
+export interface AdminProfessionalRow {
+  id: string; full_name: string; phone: string; status: AccountStatus; created_at: string;
+  has_profile: boolean; kyc_status: string | null; visible: boolean; radius_km: number | null; level: string | null;
+  rating_avg: number; rating_count: number; completed_count: number; weekly_days: number;
+  offers: { category: string; rate_cents: number }[]; active_strikes: number; bookings_total: number;
+}
+export interface AdminProfessionalList {
+  total: number;
+  summary: { total: number; incomplete: number; pending: number; approved: number; rejected: number; suspended: number; visible: number };
+  items: AdminProfessionalRow[];
+}
+export interface AuditItem {
+  id: string; action: string; entity: string; entity_id: string; before: Record<string, unknown> | null; after: Record<string, unknown> | null;
+  created_at: string; actor_name: string;
+}
+export interface AdminProfessionalDetail {
+  user: { id: string; full_name: string; phone: string; email: string | null; status: AccountStatus; created_at: string; terms_version: string | null };
+  profile: {
+    bio: string | null; radius_km: number; pix_key_masked: string; lat: number; lng: number; kyc_status: string; kyc_reason: string | null; visible: boolean; level: string;
+    rating_avg: number; rating_count: number; completed_count: number; attendance_rate: number | null; acceptance_rate: number | null;
+  } | null;
+  offers: { category: string; name: string; daily_rate_cents: number }[];
+  weekly: { days: number[]; start_time: string | null; end_time: string | null };
+  strikes: { kind: string; created_at: string; expires_at: string; active: boolean; booking_code: string | null }[];
+  bookings: { id: string; code: string; status: BookingStatus; category: string; starts_at: string; client_name: string; total_cents: number }[];
+  history: AuditItem[];
+}
+export interface AdminClientRow {
+  id: string; full_name: string; phone: string; email: string | null; status: AccountStatus; created_at: string; kind: string | null;
+  addresses: number; bookings_total: number; bookings_done: number; bookings_lost: number; spent_cents: number;
+}
+export interface AdminClientList { total: number; summary: { total: number; active: number; suspended: number; companies: number }; items: AdminClientRow[] }
+export interface AdminClientDetail {
+  user: AdminProfessionalDetail['user'];
+  profile: { kind: string; cnpj_masked: string | null; legal_name: string | null } | null;
+  addresses: { label: string | null; district: string | null; city: string; state: string }[];
+  totals: { bookings: number; done: number; lost: number; spent_cents: number };
+  bookings: { id: string; code: string; status: BookingStatus; category: string; starts_at: string; professional_name: string; total_cents: number }[];
+  history: AuditItem[];
+}
+export interface PlatformOverview {
+  days: number; from: string; to: string;
+  users: { clients: number; professionals: number; admins: number; suspended: number };
+  professionals: { approved: number; pending: number; visible: number };
+  bookings: { total: number; done: number; lost: number; gmv_cents: number; revenue_cents: number };
+  bookings_by_day: { day: string; total: number; done: number }[];
+  signups_by_day: { day: string; clients: number; professionals: number }[];
+  queues: { kyc_pending: number; disputes_open: number; refunds_pending: number; payouts_open: number; late_without_checkin: number };
+}
+export interface AdminCategory {
+  slug: string; name: string; min_daily_rate_cents: number; max_daily_rate_cents: number; min_photos_checkout: number; active: boolean; professionals: number;
+}
+export interface AdminSetting {
+  key: string; label: string; help: string; unit: 'bps' | 'minutos' | 'horas' | 'metros' | 'tentativas'; group: 'Taxas' | 'Prazos' | 'Regras';
+  min: number; max: number; default: number; value: number; custom: boolean; updated_at: string | null; updated_by_name: string | null;
+}
+
+export const KYC_LABEL: Record<string, string> = { pending: 'Aguardando verificação', in_review: 'Em análise', approved: 'Aprovado', rejected: 'Reprovado', incomplete: 'Cadastro incompleto' };
+export const ACCOUNT_STATUS_LABEL: Record<AccountStatus, string> = { active: 'Ativa', suspended: 'Suspensa', deleted: 'Excluída' };
+export const STRIKE_KIND_LABEL: Record<string, string> = { cancellation: 'Cancelamento', no_show: 'Ausência', conduct: 'Conduta' };
+export const LEVEL_LABEL: Record<string, string> = { bronze: 'Bronze', silver: 'Prata', gold: 'Ouro' };
+export const AUDIT_LABEL: Record<string, string> = {
+  'user.suspended': 'Conta suspensa', 'user.reactivated': 'Conta reativada', 'user.deleted': 'Conta excluída pelo próprio usuário', 'user.promoted_to_admin': 'Promovido a administrador',
+  'professional.hidden': 'Ocultado da busca', 'professional.shown': 'Exibido na busca', 'kyc.decision': 'Decisão de verificação',
+  'category.created': 'Serviço criado', 'category.updated': 'Serviço alterado', 'config.updated': 'Parâmetro alterado', 'config.reset': 'Parâmetro restaurado ao padrão',
+};
+export const auditLabel = (action: string) => AUDIT_LABEL[action] ?? action;
+
+/** Valor de um parâmetro para exibição, com a unidade ("5%", "15 minutos"). */
+export function formatSetting(value: number, unit: AdminSetting['unit']): string {
+  if (unit === 'bps') return `${(value / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
+  const one = value === 1;
+  const word = unit === 'minutos' ? (one ? 'minuto' : 'minutos') : unit === 'horas' ? (one ? 'hora' : 'horas') : unit === 'metros' ? (one ? 'metro' : 'metros') : one ? 'tentativa' : 'tentativas';
+  return `${value} ${word}`;
+}
+
 // ------------------------------------------------------------------ cliente HTTP
 export class ApiClientError extends Error {
   readonly status: number;
@@ -255,6 +335,25 @@ export function createClient(opts: ClientOptions) {
     adminBookings: (p: { date?: string; status?: BookingStatus; limit?: number } = {}) =>
       call<{ items: AdminBooking[] }>('GET', `/v1/admin/bookings${qs(p)}`).then((r) => r.items),
     adminSchedule: (date?: string) => call<AdminSchedule>('GET', `/v1/admin/schedule${qs({ date })}`),
+    // gestão
+    adminProfessionals: (p: { q?: string; kyc?: KycFilter; status?: AccountStatus; visible?: boolean; service?: string; limit?: number; offset?: number } = {}) =>
+      call<AdminProfessionalList>('GET', `/v1/admin/professionals${qs({ ...p, visible: p.visible === undefined ? undefined : String(p.visible) })}`),
+    adminProfessional: (id: string) => call<AdminProfessionalDetail>('GET', `/v1/admin/professionals/${id}`),
+    setProfessionalVisible: (id: string, visible: boolean, reason?: string) => call<{ id: string; visible: boolean }>('PUT', `/v1/admin/professionals/${id}/visible`, { visible, reason }),
+    adminClients: (p: { q?: string; status?: AccountStatus; limit?: number; offset?: number } = {}) => call<AdminClientList>('GET', `/v1/admin/clients${qs(p)}`),
+    adminClient: (id: string) => call<AdminClientDetail>('GET', `/v1/admin/clients/${id}`),
+    suspendUser: (id: string, reason: string) => call<{ id: string; status: AccountStatus }>('POST', `/v1/admin/users/${id}/suspend`, { reason }),
+    reactivateUser: (id: string, reason?: string) => call<{ id: string; status: AccountStatus }>('POST', `/v1/admin/users/${id}/reactivate`, { reason }),
+    platformOverview: (days = 30) => call<PlatformOverview>('GET', `/v1/admin/platform/overview${qs({ days })}`),
+    adminCategories: () => call<{ items: AdminCategory[] }>('GET', '/v1/admin/categories').then((r) => r.items),
+    updateCategory: (slug: string, patch: Partial<Pick<AdminCategory, 'name' | 'min_daily_rate_cents' | 'max_daily_rate_cents' | 'min_photos_checkout' | 'active'>>) =>
+      call<{ slug: string }>('PUT', `/v1/admin/categories/${slug}`, patch),
+    createCategory: (c: { slug: string; name: string; min_daily_rate_cents: number; max_daily_rate_cents: number; min_photos_checkout: number }) => call<{ slug: string }>('POST', '/v1/admin/categories', c),
+    adminConfig: () => call<{ items: AdminSetting[] }>('GET', '/v1/admin/config').then((r) => r.items),
+    setConfigValue: (key: string, value: number) => call<{ key: string; value: number }>('PUT', `/v1/admin/config/${key}`, { value }),
+    resetConfigValue: (key: string) => call<{ key: string; value: number }>('DELETE', `/v1/admin/config/${key}`),
+    adminAudit: (limit = 50) => call<{ items: AuditItem[] }>('GET', `/v1/admin/audit${qs({ limit })}`).then((r) => r.items),
+
     kycQueue: () => call<{ items: KycItem[] }>('GET', '/v1/admin/kyc/queue').then((r) => r.items),
     kycDecision: (userId: string, decision: 'approve' | 'reject', reason?: string) =>
       call<{ user_id: string; kyc_status: string }>('POST', `/v1/admin/kyc/${userId}/decision`, { decision, reason }),

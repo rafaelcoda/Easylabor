@@ -22,3 +22,13 @@ const TONE: Partial<Record<BookingStatus, 'ok' | 'wait' | 'bad' | 'done'>> = {
   cancelled_by_client: 'bad', cancelled_by_professional: 'bad', refunded: 'bad',
 };
 export const toneOf = (s: BookingStatus) => TONE[s] ?? 'wait';
+
+export const dateBR = (iso: string) => new Date(Date.parse(iso) - 3 * 3_600_000).toISOString().slice(0, 10).split('-').reverse().join('/');
+export const dateTimeBR = (iso: string) => `${dateBR(iso)} ${timeSP(iso)}`;
+/** "(27) 99999-0001" a partir de "+5527999990001". */
+export function phoneBR(p: string): string {
+  const d = p.replace(/\D/g, '');
+  if (d.length === 13 && d.startsWith('55')) return `(${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+  return p;
+}
+export const dayShort = (day: string) => day.split('-').reverse().slice(0, 2).join('/');

@@ -9,8 +9,12 @@ const NAV = [
   { href: '/', label: 'Painel ao vivo' },
   { href: '/agenda/', label: 'Agenda' },
   { href: '/pedidos/', label: 'Pedidos' },
+  { href: '/profissionais/', label: 'Profissionais' },
+  { href: '/clientes/', label: 'Clientes' },
   { href: '/verificacao/', label: 'Verificação' },
+  { href: '/plataforma/', label: 'Plataforma' },
 ];
+const isOn = (path: string, href: string) => path === href || path === href.slice(0, -1) || (href !== '/' && path.startsWith(href.slice(0, -1)));
 
 /** Protege as telas: só entra quem está logado como admin. */
 export function Shell({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
@@ -39,7 +43,7 @@ export function Shell({ title, subtitle, children }: { title: string; subtitle?:
         <div className="brand"><img src="/simbolo-fundo-escuro.svg" alt="" />Easylabor</div>
         <div className="sub">Operação</div>
         {NAV.map((n) => (
-          <Link key={n.href} href={n.href} className={path === n.href || path === n.href.slice(0, -1) ? 'on' : ''}>{n.label}</Link>
+          <Link key={n.href} href={n.href} className={isOn(path, n.href) ? 'on' : ''}>{n.label}</Link>
         ))}
         <button onClick={signOut}>Sair</button>
       </aside>

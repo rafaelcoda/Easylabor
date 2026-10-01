@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, categoryName, createClient, eventLabel, PAYMENT_STATUS_LABEL, WEEKDAYS, errorMessage, formatBRL, photoPath } from '../src';
+import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, categoryName, createClient, eventLabel, PAYMENT_STATUS_LABEL, WEEKDAYS, auditLabel, formatSetting, errorMessage, formatBRL, photoPath } from '../src';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const make = (impl: (url: string, init: RequestInit) => Response | Promise<Response>, token: string | null = 'tok') => {
@@ -103,5 +103,33 @@ describe('cliente da API', () => {
     const del = make(() => new Response(null, { status: 204 }));
     await del.api.removeOffer('pintor');
     expect(del.f.mock.calls[0]![1].method).toBe('DELETE');
+  });
+
+  it('gestão: monta as consultas com filtros e chama as rotas certas', async () => {
+    const { f, api } = make(() => json(200, { total: 0, summary: {}, items: [] }));
+    await api.adminProfessionals({ q: 'ma rc', kyc: 'pending', visible: false, limit: 20, offset: 40 });
+    expect(f.mock.calls[0]![0]).toBe('https://api.test/v1/admin/professionals?q=ma%20rc&kyc=pending&visible=false&limit=20&offset=40');
+    await api.adminClients({ status: 'suspended' });
+    expect(f.mock.calls[1]![0]).toBe('https://api.test/v1/admin/clients?status=suspended');
+    await api.platformOverview(7);
+    expect(f.mock.calls[2]![0]).toBe('https://api.test/v1/admin/platform/overview?days=7');
+    await api.suspendUser('u1', 'Fraude');
+    expect(f.mock.calls[3]![1].method).toBe('POST');
+    expect(JSON.parse(f.mock.calls[3]![1].body as string)).toEqual({ reason: 'Fraude' });
+    await api.setConfigValue('client_fee_bps', 800);
+    expect(f.mock.calls[4]![0]).toBe('https://api.test/v1/admin/config/client_fee_bps');
+    expect(f.mock.calls[4]![1].method).toBe('PUT');
+    await api.resetConfigValue('client_fee_bps');
+    expect(f.mock.calls[5]![1].method).toBe('DELETE');
+  });
+
+  it('gestão: textos de exibição em português', () => {
+    expect(formatSetting(500, 'bps')).toBe('5%');
+    expect(formatSetting(1250, 'bps')).toBe('12,5%');
+    expect(formatSetting(15, 'minutos')).toBe('15 minutos');
+    expect(formatSetting(1, 'horas')).toBe('1 hora');
+    expect(formatSetting(300, 'metros')).toBe('300 metros');
+    expect(auditLabel('user.suspended')).toBe('Conta suspensa');
+    expect(auditLabel('algo.novo')).toBe('algo.novo');
   });
 });
