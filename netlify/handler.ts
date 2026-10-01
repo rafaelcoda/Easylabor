@@ -1,5 +1,5 @@
 import { createApp } from '../packages/api/src/app';
-import { supabaseAuthenticator } from '../packages/api/src/auth';
+import { authenticatorFrom, supabaseIdentity } from '../packages/api/src/auth';
 import { createSql } from '../packages/api/src/db';
 
 // Variável global fornecida pelo runtime da Netlify.
@@ -23,10 +23,10 @@ function getApp(): AppHandle | null {
   const sql = createSql(databaseUrl, { max: 1, prepare: false, idle_timeout: 20, connect_timeout: 10, connection: {} });
   const supabaseUrl = Netlify.env.get('SUPABASE_URL');
   const anonKey = Netlify.env.get('SUPABASE_ANON_KEY');
-  const authenticate =
-    supabaseUrl && anonKey ? supabaseAuthenticator({ supabaseUrl, anonKey, sql }) : async () => null;
+  const identify = supabaseUrl && anonKey ? supabaseIdentity({ supabaseUrl, anonKey }) : async () => null;
+  const authenticate = authenticatorFrom(identify, sql);
 
-  cached = createApp({ sql, authenticate, devRoutes: Netlify.env.get('DEV_ROUTES') === 'true' });
+  cached = createApp({ sql, authenticate, identify, devRoutes: Netlify.env.get('DEV_ROUTES') === 'true' });
   return cached;
 }
 

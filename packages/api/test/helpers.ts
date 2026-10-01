@@ -20,6 +20,11 @@ export function makeApp(sql: Sql, devRoutes = true) {
     sql,
     devRoutes,
     now: () => clock.now,
+    // Simula o Supabase Auth: o cabeçalho x-test-auth-id (e x-test-phone) representa um token válido.
+    identify: async (req) => {
+      const id = req.headers.get('x-test-auth-id');
+      return id ? { id, phone: req.headers.get('x-test-phone') } : null;
+    },
     authenticate: async (req): Promise<AuthUser | null> => {
       const id = req.headers.get('x-test-user');
       if (!id) return null;
@@ -68,8 +73,11 @@ export async function seedWorld(sql: Sql): Promise<World> {
   return { client, otherClient, pro, pro2, admin, address };
 }
 
-export async function call(app: ReturnType<typeof makeApp>, method: string, path: string, userId: string | null, body?: unknown) {
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
+export async function call(
+  app: ReturnType<typeof makeApp>, method: string, path: string, userId: string | null, body?: unknown,
+  extraHeaders: Record<string, string> = {},
+) {
+  const headers: Record<string, string> = { 'content-type': 'application/json', ...extraHeaders };
   if (userId) headers['x-test-user'] = userId;
   const res = await app.request(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: res.status, json: (await res.json().catch(() => null)) as any };
@@ -100,4 +108,15 @@ export async function ledgerBalance(sql: Sql, bookingId: string, account: string
     SELECT COALESCE(SUM(CASE direction WHEN 'debit' THEN amount_cents ELSE -amount_cents END), 0) AS b
     FROM ledger_entries WHERE booking_id = ${bookingId} AND account = ${account}`;
   return Number(r[0]!.b);
+}
+
+/** Login simulado de alguém ainda sem cadastro (token válido do Supabase Auth). */
+export const asIdentity = (authId: string, phone: string | null) => ({ 'x-test-auth-id': authId, ...(phone ? { 'x-test-phone': phone } : {}) });
+
+export async function seedAdminOnly(sql: Sql): Promise<string> {
+  await sql`TRUNCATE users CASCADE`;
+  const r = await sql`
+    INSERT INTO users (role, full_name, phone, accepted_terms_version, accepted_terms_at)
+    VALUES ('admin', 'Operação', '+5527900000099', 'v1', now()) RETURNING id`;
+  return r[0]!.id as string;
 }

@@ -13,7 +13,7 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 | `packages/core` | Regras de negócio puras em TypeScript: preço, antecipação, máquina de estados do pedido, cancelamento e no-show, check-in por GPS, ranking, ledger em partidas dobradas, prazos. **44 testes passando.** |
 | `db/migrations` | Esquema PostgreSQL + PostGIS com as 27 tabelas da especificação, travas de integridade (horários sobrepostos, ledger balanceado, tabelas só de inserção). **15 testes SQL passando.** |
 | Banco na nuvem | Projeto **EasyLabor** no Supabase (região São Paulo, `sa-east-1`) com o esquema, o RLS e o seed aplicados. Ver seção abaixo. |
-| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **27 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
+| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **45 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
 | `netlify/` | Função que expõe a API na Netlify (`handler.ts` + `functions/api.mts`). Site `easylabor-api` ligado ao GitHub. |
 | App (Expo), painel web | Ainda não iniciados (sprints 4 e 5 abaixo). |
 
@@ -48,7 +48,10 @@ Supabase (`src/edge.ts`). A API conecta direto ao PostgreSQL com credencial de s
 | Método e rota | Perfil | O que faz |
 | --- | --- | --- |
 | `GET /health`, `GET /v1/categories` | público | Saúde e categorias |
-| `GET /v1/me` | login | Usuário autenticado |
+| `GET /v1/me`, `POST /v1/me/register` | login (mesmo sem cadastro) | Consulta o perfil; cadastra cliente ou profissional a partir do telefone verificado |
+| `GET/POST/DELETE /v1/client/addresses` | cliente | Endereços (o app informa latitude e longitude) |
+| `PUT /v1/professional/profile`, `offers/:categoria`, `availability/:dia`, `status` | profissional | Perfil e raio, serviço e valor (dentro da faixa), agenda e "disponível" |
+| `GET /v1/admin/kyc/queue`, `POST /v1/admin/kyc/:id/decision` | admin | Fila e decisão de verificação, com log de auditoria |
 | `GET /v1/search/professionals` | cliente | Busca por categoria, data e endereço, ordenada pelo score do PRD |
 | `POST /v1/bookings/quote` | login | Cotação (diária, taxa, comissão, líquido) |
 | `POST /v1/bookings` | cliente | Cria o pedido aguardando pagamento, com Pix pendente |
@@ -67,7 +70,17 @@ Erros seguem o formato `{ error: { code, message, details, request_id } }` da es
 (depende dos jobs da sprint 3), disputa, avaliações, chat, upload de arquivos, cadastro e KYC do profissional,
 antecipação, rotas de admin e webhooks reais do provedor.
 
-**Autenticação:** a API valida o token do Supabase Auth (`supabaseAuthenticator`) e exige que `users.id` seja o id do
+**Login e cadastro:** o login é por telefone (Supabase Auth). O token vale para `/v1/me` e `/v1/me/register` mesmo sem
+cadastro; as demais rotas exigem usuário cadastrado e ativo, e cada rota confere o perfil (cliente, profissional ou admin).
+`users.id` é o mesmo id do Supabase Auth. Admin não se cadastra pela API: promova a conta por SQL
+(`UPDATE users SET role = 'admin' WHERE phone = '+55...'`).
+
+**Testar o login sem SMS e sem app:** habilite o login por telefone no Supabase (*Authentication > Sign In / Providers > Phone*)
+e cadastre um número de teste com código fixo (*Test Phone Numbers and OTPs*, formato `5527999990001=123456`). Depois:
+`SUPABASE_URL=... SUPABASE_ANON_KEY=... node scripts/login-teste.mjs +5527999990001 123456` imprime o token, e
+`curl https://easylabor-api.netlify.app/v1/me -H "Authorization: Bearer <token>"` consulta o perfil.
+
+**Autenticação (detalhe técnico):** a API valida o token do Supabase Auth (`supabaseAuthenticator`) e exige que `users.id` seja o id do
 usuário no Supabase Auth. O login por SMS depende de configurar um provedor de SMS no painel do Supabase. Essa parte
 **não foi testada de ponta a ponta** (os testes usam um autenticador falso).
 

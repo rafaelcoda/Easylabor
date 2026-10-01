@@ -1,12 +1,16 @@
 import { DEFAULT_CONFIG, quote as makeQuote, type BookingAction } from '@diaria/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { ApiError, forbidden, notFound } from './errors';
+import { ApiError, conflict, forbidden, notFound } from './errors';
+import {
+  createAddress, deleteAddress, getMe, kycDecision, kycQueue, listAddresses, register, setAvailability, setVisibility,
+  upsertOffer, upsertProfessionalProfile,
+} from './services/accounts';
 import { applyAction, createBooking, getBooking, listBookings } from './services/bookings';
 import { searchProfessionals } from './services/search';
-import type { AuthUser, Ctx, Deps } from './types';
+import type { AuthUser, Ctx, Deps, Identity, Role } from './types';
 
-type Env = { Variables: { user: AuthUser; requestId: string } };
+type Env = { Variables: { user?: AuthUser; identity?: Identity; requestId: string } };
 
 function parse<T extends z.ZodTypeAny>(schema: T, data: unknown): z.infer<T> {
   const r = schema.safeParse(data);
@@ -66,6 +70,50 @@ const ACTIONS: Record<string, { action: BookingAction | 'cancel'; body: z.ZodTyp
   cancel: { action: 'cancel', body: z.object({ reason: z.string().max(300).optional() }) },
 };
 
+const userOf = (c: { get(k: 'user'): AuthUser | undefined }): AuthUser => {
+  const u = c.get('user');
+  if (!u) throw new ApiError(401, 'unauthenticated', 'Faça login para continuar');
+  return u;
+};
+
+/** Exige um dos papéis informados (a operação, admin, também pode agir como cliente ou profissional? não: cada rota decide). */
+const needRole = (c: { get(k: 'user'): AuthUser | undefined }, ...roles: Role[]): AuthUser => {
+  const u = userOf(c);
+  if (!roles.includes(u.role)) throw forbidden('Seu tipo de conta não permite esta ação');
+  return u;
+};
+
+const registerBody = z.object({
+  role: z.enum(['client', 'professional']),
+  full_name: z.string().trim().min(3).max(120),
+  email: z.string().email().max(200).optional(),
+  accepted_terms_version: z.string().min(1).max(40),
+  client_kind: z.enum(['person', 'company']).optional(),
+  cnpj: z.string().max(20).optional(),
+});
+const addressBody = z.object({
+  label: z.string().max(60).optional(),
+  street: z.string().trim().min(2).max(160),
+  number: z.string().max(20).optional(),
+  complement: z.string().max(80).optional(),
+  district: z.string().max(80).optional(),
+  city: z.string().trim().min(2).max(80),
+  state: z.string().length(2),
+  zip: z.string().max(12).optional(),
+  reference: z.string().max(160).optional(),
+  ...coords,
+});
+const professionalProfileBody = z.object({
+  bio: z.string().max(500).optional(),
+  ...coords,
+  radius_km: z.number().int().min(1).max(50),
+  pix_key: z.string().trim().min(5).max(140),
+});
+const offerBody = z.object({ daily_rate_cents: z.number().int().positive(), description: z.string().max(300).optional() });
+const availabilityBody = z.object({ start_time: time, end_time: time });
+const visibilityBody = z.object({ visible: z.boolean() });
+const kycBody = z.object({ decision: z.enum(['approve', 'reject']), reason: z.string().max(300).optional() });
+
 export function createApp(deps: Deps) {
   const ctx: Ctx = { sql: deps.sql, now: deps.now ?? (() => new Date()), config: deps.config ?? DEFAULT_CONFIG };
   const app = new Hono<Env>();
@@ -97,15 +145,90 @@ export function createApp(deps: Deps) {
   });
 
   // ---- autenticadas
+  // Rotas que aceitam quem tem login válido mas ainda não completou o cadastro.
+  const IDENTITY_ONLY = new Set(['/v1/me', '/v1/me/register']);
+
   app.use('/v1/*', async (c, next) => {
     if (c.req.path === '/v1/categories') return next();
     const user = await deps.authenticate(c.req.raw);
-    if (!user) throw new ApiError(401, 'unauthenticated', 'Faça login para continuar');
-    c.set('user', user);
-    await next();
+    if (user) {
+      c.set('user', user);
+      return next();
+    }
+    if (IDENTITY_ONLY.has(c.req.path) && deps.identify) {
+      const identity = await deps.identify(c.req.raw);
+      if (identity) {
+        c.set('identity', identity);
+        return next();
+      }
+    }
+    throw new ApiError(401, 'unauthenticated', 'Faça login para continuar');
   });
 
-  app.get('/v1/me', (c) => c.json(c.get('user')));
+  app.get('/v1/me', async (c) => {
+    const user = c.get('user');
+    if (user) return c.json(await getMe(ctx, user));
+    const identity = c.get('identity');
+    return c.json({ registered: false, id: identity?.id, phone: identity?.phone ?? null, next_step: 'register' });
+  });
+
+  app.post('/v1/me/register', async (c) => {
+    if (c.get('user')) throw conflict('already_registered', 'Este usuário já está cadastrado');
+    const identity = c.get('identity');
+    if (!identity) throw new ApiError(401, 'unauthenticated', 'Faça login para continuar');
+    const b = parse(registerBody, await jsonBody(c.req.raw));
+    const me = await register(ctx, identity, {
+      role: b.role, fullName: b.full_name, email: b.email, termsVersion: b.accepted_terms_version, clientKind: b.client_kind, cnpj: b.cnpj,
+    });
+    return c.json(me, 201);
+  });
+
+  // ---- cliente: endereços
+  app.get('/v1/client/addresses', async (c) => c.json({ items: await listAddresses(ctx, needRole(c, 'client').id) }));
+  app.post('/v1/client/addresses', async (c) => {
+    const user = needRole(c, 'client');
+    const b = parse(addressBody, await jsonBody(c.req.raw));
+    return c.json(await createAddress(ctx, user.id, b), 201);
+  });
+  app.delete('/v1/client/addresses/:id', async (c) => {
+    const user = needRole(c, 'client');
+    await deleteAddress(ctx, user.id, parse(uuid, c.req.param('id')));
+    return c.body(null, 204);
+  });
+
+  // ---- profissional: perfil, serviços, agenda e visibilidade
+  app.put('/v1/professional/profile', async (c) => {
+    const user = needRole(c, 'professional');
+    const b = parse(professionalProfileBody, await jsonBody(c.req.raw));
+    return c.json(await upsertProfessionalProfile(ctx, user.id, { bio: b.bio, lat: b.lat, lng: b.lng, radiusKm: b.radius_km, pixKey: b.pix_key }));
+  });
+  app.put('/v1/professional/offers/:category', async (c) => {
+    const user = needRole(c, 'professional');
+    const b = parse(offerBody, await jsonBody(c.req.raw));
+    return c.json(await upsertOffer(ctx, user.id, c.req.param('category'), b.daily_rate_cents, b.description));
+  });
+  app.put('/v1/professional/availability/:day', async (c) => {
+    const user = needRole(c, 'professional');
+    const day = parse(date, c.req.param('day'));
+    const b = parse(availabilityBody, await jsonBody(c.req.raw));
+    return c.json(await setAvailability(ctx, user.id, day, b.start_time, b.end_time));
+  });
+  app.put('/v1/professional/status', async (c) => {
+    const user = needRole(c, 'professional');
+    const b = parse(visibilityBody, await jsonBody(c.req.raw));
+    return c.json(await setVisibility(ctx, user.id, b.visible));
+  });
+
+  // ---- operação: verificação de profissionais
+  app.get('/v1/admin/kyc/queue', async (c) => {
+    needRole(c, 'admin');
+    return c.json({ items: await kycQueue(ctx) });
+  });
+  app.post('/v1/admin/kyc/:userId/decision', async (c) => {
+    const admin = needRole(c, 'admin');
+    const b = parse(kycBody, await jsonBody(c.req.raw));
+    return c.json(await kycDecision(ctx, admin, parse(uuid, c.req.param('userId')), b.decision, b.reason));
+  });
 
   app.post('/v1/bookings/quote', async (c) => {
     const body = parse(quoteBody, await jsonBody(c.req.raw));
@@ -118,8 +241,7 @@ export function createApp(deps: Deps) {
   });
 
   app.get('/v1/search/professionals', async (c) => {
-    const user = c.get('user');
-    if (user.role !== 'client') throw forbidden('Somente clientes fazem buscas');
+    const user = needRole(c, 'client');
     const q = parse(searchQuery, Object.fromEntries(new URL(c.req.url).searchParams));
     const items = await searchProfessionals(
       ctx.sql,
@@ -130,8 +252,9 @@ export function createApp(deps: Deps) {
   });
 
   app.post('/v1/bookings', async (c) => {
+    const client = needRole(c, 'client');
     const body = parse(createBody, await jsonBody(c.req.raw));
-    const view = await createBooking(ctx, c.get('user'), {
+    const view = await createBooking(ctx, client, {
       professionalId: body.professional_id,
       category: body.category,
       addressId: body.address_id,
@@ -146,16 +269,16 @@ export function createApp(deps: Deps) {
   app.get('/v1/bookings', async (c) => {
     const params = new URL(c.req.url).searchParams;
     const limit = Math.min(Number(params.get('limit') ?? 20) || 20, 50);
-    return c.json({ items: await listBookings(ctx, c.get('user'), { status: params.get('status') ?? undefined, limit }) });
+    return c.json({ items: await listBookings(ctx, userOf(c), { status: params.get('status') ?? undefined, limit }) });
   });
 
   app.get('/v1/bookings/:id', async (c) => {
     const id = parse(uuid, c.req.param('id'));
-    return c.json(await getBooking(ctx, c.get('user'), id));
+    return c.json(await getBooking(ctx, userOf(c), id));
   });
 
   app.post('/v1/bookings/:id/:action', async (c) => {
-    const user = c.get('user');
+    const user = userOf(c);
     const id = parse(uuid, c.req.param('id'));
     const route = ACTIONS[c.req.param('action')];
     if (!route) throw notFound('Ação');
@@ -178,7 +301,7 @@ export function createApp(deps: Deps) {
     app.post('/v1/dev/bookings/:id/confirm-payment', async (c) => {
       const id = parse(uuid, c.req.param('id'));
       await applyAction(ctx, { bookingId: id, action: 'payment_confirmed', user: null });
-      return c.json(await getBooking(ctx, c.get('user'), id));
+      return c.json(await getBooking(ctx, userOf(c), id));
     });
   }
 

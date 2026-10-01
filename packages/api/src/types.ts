@@ -3,16 +3,27 @@ import type { Sql } from './db';
 
 export type Role = 'client' | 'professional' | 'admin';
 
+/** Usuário já cadastrado em public.users. */
 export interface AuthUser {
   id: string;
   role: Role;
 }
 
+/** Identidade vinda do login (Supabase Auth): token válido, ainda sem cadastro no produto. */
+export interface Identity {
+  id: string;
+  phone: string | null;
+}
+
 export type Authenticate = (req: Request) => Promise<AuthUser | null>;
+export type Identify = (req: Request) => Promise<Identity | null>;
 
 export interface Deps {
   sql: Sql;
+  /** Usuário cadastrado e ativo. */
   authenticate: Authenticate;
+  /** Token válido, mesmo sem cadastro (usado em /v1/me e /v1/me/register). */
+  identify?: Identify;
   now?: () => Date;
   config?: Config;
   /** Rotas de desenvolvimento (simulam webhooks do provedor de pagamentos). Nunca em produção. */
