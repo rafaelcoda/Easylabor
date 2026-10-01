@@ -32,7 +32,7 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 - Toda mudança de código vem com teste. Rode `npm test` e `npm run typecheck` antes de commitar.
 
 ## Infraestrutura
-- Migrações aplicadas no Supabase: 0001 a 0005 (a 0005 é a disponibilidade semanal).
+- Migrações aplicadas no Supabase: 0001 a 0006 (0005 = disponibilidade semanal; 0006 = equipe e níveis de acesso).
 - Banco: Supabase, projeto **EasyLabor** (`hbyzutbpkzaiuutgiaqs`, região São Paulo). RLS ligado em todas as tabelas, sem políticas: só o servidor acessa, com credencial de servidor.
 - API: Netlify, site `easylabor-api` (`https://easylabor-api.netlify.app`). Publica sozinho a cada commit na `main`.
 - Variáveis no Netlify: `DATABASE_URL` (secreta, string do Transaction pooler, porta 6543, usuário `postgres.<projeto>`), `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
@@ -47,6 +47,11 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 - Parâmetros de negócio editáveis em `packages/api/src/services/settings.ts` (lista fechada, com limites). Para tornar um novo parâmetro editável, acrescente-o ali e use `ctx.config`.
 - Toda ação do administrador sobre contas, serviços e parâmetros deve gravar em `audit_logs` (função `audit` em `services/manage.ts`).
 - Páginas do painel não podem exportar funções soltas (limitação do Next.js): coloque apoio em `apps/panel/src/lib`.
+
+## Equipe e níveis de acesso
+- Rotas de administrador usam `needRole(c, 'admin')` (rotina) ou `needOwner(c)` (equipe, serviços e parâmetros). Ao criar uma rota nova que altera regras do negócio ou acessos, use `needOwner`.
+- Nunca criar um admin por fora do convite, a não ser por SQL numa emergência (e gravar `admin_level`). O convite exige telefone sem conta.
+- Os convites de teste dependem do código por SMS: com números de teste do Supabase (código fixo) qualquer pessoa que conheça o código entra. Em produção, convide só com telefones reais.
 
 ## Fotos (Supabase Storage)
 - Bucket privado `booking-photos`; caminho obrigatório `<usuário>/<pedido>/<arquivo>` (função `photoPath` em `packages/client`).

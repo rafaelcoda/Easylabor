@@ -32,8 +32,8 @@ export function makeApp(sql: Sql, devRoutes = true, paymentProvider?: PaymentPro
     authenticate: async (req): Promise<AuthUser | null> => {
       const id = req.headers.get('x-test-user');
       if (!id) return null;
-      const r = await sql`SELECT id, role FROM users WHERE id = ${id} AND status = 'active'`;
-      return r[0] ? ({ id: r[0].id, role: r[0].role } as AuthUser) : null;
+      const r = await sql`SELECT id, role, admin_level FROM users WHERE id = ${id} AND status = 'active'`;
+      return r[0] ? ({ id: r[0].id, role: r[0].role, ...(r[0].role === 'admin' ? { adminLevel: r[0].admin_level ?? 'operator' } : {}) } as AuthUser) : null;
     },
   });
 }
@@ -61,6 +61,7 @@ export async function seedWorld(sql: Sql): Promise<World> {
   const pro = await mk('professional', 'Marcos S.', '+5527900000003');
   const pro2 = await mk('professional', 'Rafaela T.', '+5527900000004');
   const admin = await mk('admin', 'Operação', '+5527900000005');
+  await sql`UPDATE users SET admin_level = 'owner' WHERE id = ${admin}`;
   for (const c of [client, otherClient]) await sql`INSERT INTO client_profiles (user_id, kind) VALUES (${c}, 'person')`;
   const address = (await sql`
     INSERT INTO addresses (client_id, street, number, district, city, state, location)
@@ -120,8 +121,8 @@ export const asIdentity = (authId: string, phone: string | null) => ({ 'x-test-a
 export async function seedAdminOnly(sql: Sql): Promise<string> {
   await sql`TRUNCATE users CASCADE`;
   const r = await sql`
-    INSERT INTO users (role, full_name, phone, accepted_terms_version, accepted_terms_at)
-    VALUES ('admin', 'Operação', '+5527900000099', 'v1', now()) RETURNING id`;
+    INSERT INTO users (role, admin_level, full_name, phone, accepted_terms_version, accepted_terms_at)
+    VALUES ('admin', 'owner', 'Operação', '+5527900000099', 'v1', now()) RETURNING id`;
   return r[0]!.id as string;
 }
 

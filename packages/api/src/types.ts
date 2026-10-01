@@ -5,9 +5,13 @@ import type { PaymentProvider } from './payments/provider';
 export type Role = 'client' | 'professional' | 'admin';
 
 /** Usuário já cadastrado em public.users. */
+export type AdminLevel = 'owner' | 'operator';
+
 export interface AuthUser {
   id: string;
   role: Role;
+  /** Só para administradores. Sem nível definido vale o menor privilégio (operator). */
+  adminLevel?: AdminLevel;
 }
 
 /** Identidade vinda do login (Supabase Auth): token válido, ainda sem cadastro no produto. */

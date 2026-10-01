@@ -49,7 +49,7 @@ export async function register(ctx: Ctx, identity: Identity, input: RegisterInpu
 }
 
 export async function getMe(ctx: Ctx, user: AuthUser) {
-  const u = (await ctx.sql`SELECT id, role, full_name, phone, email, status FROM users WHERE id = ${user.id}`)[0];
+  const u = (await ctx.sql`SELECT id, role, full_name, phone, email, status, admin_level FROM users WHERE id = ${user.id}`)[0];
   if (!u) throw notFound('Usuário');
   const base = { registered: true, id: u.id, role: u.role, full_name: u.full_name, phone: u.phone, email: u.email, status: u.status };
 
@@ -72,7 +72,7 @@ export async function getMe(ctx: Ctx, user: AuthUser) {
       next_step: next,
     };
   }
-  return { ...base, next_step: 'ready' };
+  return { ...base, admin_level: (u.admin_level as string | null) ?? 'operator', next_step: 'ready' };
 }
 
 // ------------------------------------------------------------------ endereços do cliente

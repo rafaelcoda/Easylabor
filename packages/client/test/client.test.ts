@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, categoryName, createClient, eventLabel, PAYMENT_STATUS_LABEL, WEEKDAYS, auditLabel, formatSetting, errorMessage, formatBRL, photoPath } from '../src';
+import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, categoryName, createClient, eventLabel, PAYMENT_STATUS_LABEL, WEEKDAYS, auditLabel, formatSetting, LEVEL_NAME, LEVEL_HELP, errorMessage, formatBRL, photoPath } from '../src';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const make = (impl: (url: string, init: RequestInit) => Response | Promise<Response>, token: string | null = 'tok') => {
@@ -131,5 +131,25 @@ describe('cliente da API', () => {
     expect(formatSetting(300, 'metros')).toBe('300 metros');
     expect(auditLabel('user.suspended')).toBe('Conta suspensa');
     expect(auditLabel('algo.novo')).toBe('algo.novo');
+  });
+
+  it('equipe: chama as rotas certas e traduz os níveis', async () => {
+    const { f, api } = make(() => json(200, {}));
+    await api.adminTeam();
+    expect(f.mock.calls[0]![0]).toBe('https://api.test/v1/admin/team');
+    await api.inviteMember({ full_name: 'Beatriz Lopes', phone: '(27) 99888-1122', level: 'operator' });
+    expect(f.mock.calls[1]![1].method).toBe('POST');
+    expect(JSON.parse(f.mock.calls[1]![1].body as string)).toEqual({ full_name: 'Beatriz Lopes', phone: '(27) 99888-1122', level: 'operator' });
+    await api.setMemberLevel('u1', 'owner');
+    expect([f.mock.calls[2]![0], f.mock.calls[2]![1].method]).toEqual(['https://api.test/v1/admin/team/members/u1', 'PUT']);
+    await api.deactivateMember('u1');
+    expect(f.mock.calls[3]![0]).toBe('https://api.test/v1/admin/team/members/u1/deactivate');
+    await api.revokeInvite('i1');
+    expect(f.mock.calls[4]![1].method).toBe('DELETE');
+    await api.acceptInvite();
+    expect(f.mock.calls[5]![0]).toBe('https://api.test/v1/admin/accept-invite');
+    expect(LEVEL_NAME).toEqual({ owner: 'Administrador', operator: 'Operador' });
+    expect(LEVEL_HELP.operator).toMatch(/Não altera equipe/);
+    expect(auditLabel('team.invited')).toBe('Convite enviado');
   });
 });

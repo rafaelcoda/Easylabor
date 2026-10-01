@@ -18,7 +18,7 @@ const LOST = ['cancelled_by_client', 'cancelled_by_professional', 'no_show_profe
 export const maskPix = (k: string) => (k.length <= 4 ? '••••' : `${k.slice(0, 2)}•••${k.slice(-2)}`);
 const maskDoc = (d: string | null) => (d ? `${d.slice(0, 2)}•••••••••${d.slice(-2)}` : null);
 
-async function audit(tx: Sql, actor: string | null, action: string, entity: string, id: string, before: unknown, after: unknown) {
+export async function audit(tx: Sql, actor: string | null, action: string, entity: string, id: string, before: unknown, after: unknown) {
   await tx`
     INSERT INTO audit_logs (actor_id, action, entity, entity_id, before, after)
     VALUES (${actor}, ${action}, ${entity}, ${id}, ${before ? tx.json(before as never) : null}, ${after ? tx.json(after as never) : null})`;

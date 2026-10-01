@@ -94,7 +94,8 @@ function Geral() {
 
 // ------------------------------------------------------------------ serviços
 function Servicos() {
-  const { api } = useSession();
+  const { api, state } = useSession();
+  const owner = state.status === 'ready' && state.me.admin_level === 'owner';
   const list = useLoad(() => api.adminCategories(), [api], 0);
   const [edit, setEdit] = useState<AdminCategory | 'novo' | null>(null);
   const [form, setForm] = useState({ slug: '', name: '', min: '', max: '', photos: '1', active: true });
@@ -121,7 +122,7 @@ function Servicos() {
 
   return (
     <>
-      <div className="toolbar"><button className="btn" onClick={() => open('novo')}>Novo serviço</button></div>
+      {owner ? <div className="toolbar"><button className="btn" onClick={() => open('novo')}>Novo serviço</button></div> : <div className="notice">Somente administradores criam ou alteram serviços. Você pode consultar.</div>}
       {list.error && <p className="err">{list.error}</p>}
       <div className="card">
         <table>
@@ -133,7 +134,7 @@ function Servicos() {
                 <td>{formatBRL(c.min_daily_rate_cents)} a {formatBRL(c.max_daily_rate_cents)}</td>
                 <td>{c.min_photos_checkout}</td><td>{c.professionals}</td>
                 <td>{c.active ? <Badge tone="ok">Ativo</Badge> : <Badge tone="bad">Desativado</Badge>}</td>
-                <td><button className="btn sec" onClick={() => open(c)}>Editar</button></td>
+                <td>{owner && <button className="btn sec" onClick={() => open(c)}>Editar</button>}</td>
               </tr>
             ))}
           </tbody>
@@ -161,7 +162,8 @@ function Servicos() {
 
 // ------------------------------------------------------------------ parâmetros
 function Parametros() {
-  const { api } = useSession();
+  const { api, state } = useSession();
+  const owner = state.status === 'ready' && state.me.admin_level === 'owner';
   const list = useLoad(() => api.adminConfig(), [api], 0);
   const [edit, setEdit] = useState<AdminSetting | null>(null);
   const [text, setText] = useState('');
@@ -186,7 +188,7 @@ function Parametros() {
 
   return (
     <>
-      <div className="notice">Estas regras valem para <b>pedidos novos</b>, em até 1 minuto. Pedidos que já existem mantêm os valores combinados. Toda alteração fica registrada na aba Auditoria.</div>
+      <div className="notice">Estas regras valem para <b>pedidos novos</b>, em até 1 minuto. Pedidos que já existem mantêm os valores combinados. Toda alteração fica registrada na aba Auditoria.{!owner && ' Somente administradores alteram os parâmetros; você pode consultar.'}</div>
       {(list.error || msg) && !edit && <p className="err">{list.error ?? msg}</p>}
       {groups.map((g) => (
         <div key={g} className="set-group">
@@ -200,10 +202,10 @@ function Parametros() {
                     <td><b>{s.label}</b>{s.custom && <span className="pill-custom">alterado</span>}<div className="sub-line">{s.help}</div></td>
                     <td><b>{formatSetting(s.value, s.unit)}</b>{s.custom && s.updated_by_name && <div className="sub-line">por {s.updated_by_name}</div>}</td>
                     <td className="muted">{formatSetting(s.default, s.unit)}</td>
-                    <td><span className="row" style={{ justifyContent: 'flex-end' }}>
+                    <td>{owner && <span className="row" style={{ justifyContent: 'flex-end' }}>
                       <button className="btn sec" onClick={() => open(s)}>Alterar</button>
                       {s.custom && <button className="btn warn" onClick={() => reset(s)}>Restaurar padrão</button>}
-                    </span></td>
+                    </span>}</td>
                   </tr>
                 ))}
               </tbody>

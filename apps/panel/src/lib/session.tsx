@@ -10,7 +10,7 @@ const supabase = createSupabase(SUPABASE_URL, SUPABASE_KEY);
 type State =
   | { status: 'loading' }
   | { status: 'out' }
-  | { status: 'denied'; me: Me | null }
+  | { status: 'denied'; me: Me | null; noInvite?: boolean }
   | { status: 'ready'; me: Me };
 
 interface Ctx {
@@ -43,7 +43,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!session) return setState({ status: 'out' });
     setState({ status: 'loading' });
     api.me().then(
-      (me) => setState(me.registered && me.role === 'admin' ? { status: 'ready', me } : { status: 'denied', me }),
+      async (me) => {
+        if (me.registered) return setState(me.role === 'admin' ? { status: 'ready', me } : { status: 'denied', me });
+        // Primeiro acesso: se este telefone foi convidado para a equipe, o acesso é criado agora.
+        try {
+          await api.acceptInvite();
+          const fresh = await api.me();
+          setState(fresh.registered && fresh.role === 'admin' ? { status: 'ready', me: fresh } : { status: 'denied', me: fresh });
+        } catch {
+          setState({ status: 'denied', me, noInvite: true });
+        }
+      },
       () => setState({ status: 'denied', me: null }),
     );
   }, [session, api]);

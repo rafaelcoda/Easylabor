@@ -13,10 +13,10 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 | `packages/core` | Regras de negócio puras em TypeScript: preço, antecipação, máquina de estados do pedido, cancelamento e no-show, check-in por GPS, ranking, ledger em partidas dobradas, prazos. **44 testes passando.** |
 | `db/migrations` | Esquema PostgreSQL + PostGIS com as 27 tabelas da especificação, travas de integridade (horários sobrepostos, ledger balanceado, tabelas só de inserção). **15 testes SQL passando.** |
 | Banco na nuvem | Projeto **EasyLabor** no Supabase (região São Paulo, `sa-east-1`) com o esquema, o RLS e o seed aplicados. Ver seção abaixo. |
-| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **14 testes passando.** |
+| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **15 testes passando.** |
 | `apps/panel` | Painel web da operação (Next.js). Compila. |
 | `apps/mobile` | App em Expo (cliente e profissional). Tipos ok e empacotamento Android ok; **não testado em aparelho**. |
-| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **110 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
+| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **125 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
 | `netlify/` | Função que expõe a API na Netlify (`handler.ts` + `functions/api.mts`). Site `easylabor-api` ligado ao GitHub. |
 
 
@@ -50,7 +50,7 @@ pedidos), **Agenda** (profissionais x pedidos por hora, mais as ofertas aguardan
 estado), **Profissionais** (lista com filtros por verificação, serviço e visibilidade; detalhe com desempenho, advertências, pedidos e
 histórico; aprovar, reprovar, ocultar da busca, suspender e reativar), **Clientes** (lista e detalhe com pedidos, valor contratado e
 suspensão), **Verificação** (fila de aprovação) e **Plataforma** (indicadores e filas de atenção, serviços e faixas de diária,
-parâmetros de negócio editáveis e registro de auditoria). Só entra quem tem conta de **admin**.
+parâmetros de negócio editáveis e registro de auditoria) e **Equipe** (membros, níveis de acesso e convites). Só entra quem tem conta de **admin**.
 
 - Rodar: `cd apps/panel && npm install && npm run dev` (abre em `http://localhost:3001`).
 - Os endereços públicos (API, Supabase e chave pública) estão em `apps/panel/src/lib/config.ts`. Nenhum segredo.
@@ -103,6 +103,14 @@ Erros seguem o formato `{ error: { code, message, details, request_id } }` da es
 **Ainda não feito na API:** `Idempotency-Key`, reenvio automático ao próximo profissional após recusa ou prazo vencido
 (depende dos jobs da sprint 3), disputa, avaliações, chat, upload de arquivos, cadastro e KYC do profissional,
 antecipação, rotas de admin e webhooks reais do provedor.
+
+**Equipe da operação:** `users.admin_level` define dois níveis para `role = 'admin'`: **owner** (Administrador: tudo, inclusive equipe,
+serviços e parâmetros) e **operator** (Operador: rotina; consulta tudo, verifica cadastros, suspende contas e oculta da busca). Admin
+sem nível vale como operador. Novos membros entram por **convite** (`admin_invites`, validade de 7 dias, um por telefone): o
+administrador informa nome, telefone e nível; a pessoa entra no painel com esse telefone (código por SMS) e o acesso é criado na
+hora (`POST /v1/admin/accept-invite`). Só convida quem ainda não tem conta (ninguém troca de papel). Regras: nunca pode faltar um
+administrador ativo; ninguém desativa o próprio acesso. Rotas: `GET /v1/admin/team`, `POST|DELETE /v1/admin/team/invites`,
+`PUT /v1/admin/team/members/:id`, `POST .../deactivate|reactivate`. Migração `0006_staff_team.sql` (já aplicada no Supabase).
 
 **Gestão (painel):** rotas `GET /v1/admin/professionals[/:id]`, `clients[/:id]`, `platform/overview`, `categories`, `config`, `audit`;
 `POST /v1/admin/users/:id/suspend|reactivate`; `PUT /v1/admin/professionals/:id/visible`, `categories/:slug`, `config/:key`;

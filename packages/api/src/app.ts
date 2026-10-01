@@ -15,6 +15,7 @@ import {
   platformOverview, resetConfig, setConfig, setProfessionalVisible, setUserStatus, updateCategory,
 } from './services/manage';
 import { loadConfig } from './services/settings';
+import { acceptInvite, inviteMember, listTeam, revokeInvite, setMemberLevel, setMemberStatus } from './services/team';
 import { handlePaymentEvent } from './services/payments';
 import { searchProfessionals } from './services/search';
 import type { AuthUser, Ctx, Deps, Identity, Role } from './types';
@@ -87,6 +88,9 @@ const categoryCreate = z.object({
   min_photos_checkout: z.number().int().min(0).max(10).default(1),
 });
 const configBody = z.object({ value: z.number().int() });
+const levelSchema = z.enum(['owner', 'operator']);
+const inviteBody = z.object({ full_name: z.string().trim().min(3, 'informe o nome').max(120), phone: z.string().trim().min(8).max(30), level: levelSchema.default('operator') });
+const levelBody = z.object({ level: levelSchema });
 
 const searchQuery = z
   .object({
@@ -124,6 +128,13 @@ const userOf = (c: { get(k: 'user'): AuthUser | undefined }): AuthUser => {
 const needRole = (c: { get(k: 'user'): AuthUser | undefined }, ...roles: Role[]): AuthUser => {
   const u = userOf(c);
   if (!roles.includes(u.role)) throw forbidden('Seu tipo de conta não permite esta ação');
+  return u;
+};
+
+/** Exige administrador (owner). Operadores fazem a rotina, mas não mexem em equipe, serviços nem parâmetros. */
+const needOwner = (c: { get(k: 'user'): AuthUser | undefined }): AuthUser => {
+  const u = needRole(c, 'admin');
+  if (u.adminLevel !== 'owner') throw forbidden('Somente administradores podem fazer isso');
   return u;
 };
 
@@ -217,7 +228,7 @@ export function createApp(deps: Deps) {
   }
 
   // Rotas que aceitam quem tem login válido mas ainda não completou o cadastro.
-  const IDENTITY_ONLY = new Set(['/v1/me', '/v1/me/register']);
+  const IDENTITY_ONLY = new Set(['/v1/me', '/v1/me/register', '/v1/admin/accept-invite']);
 
   app.use('/v1/*', async (c, next) => {
     if (c.req.path === '/v1/categories') return next();
@@ -368,11 +379,11 @@ export function createApp(deps: Deps) {
     return c.json({ items: await adminCategories(ctx) });
   });
   app.post('/v1/admin/categories', async (c) => {
-    const admin = needRole(c, 'admin');
+    const admin = needOwner(c);
     return c.json(await createCategory(ctx, admin, parse(categoryCreate, await jsonBody(c.req.raw))), 201);
   });
   app.put('/v1/admin/categories/:slug', async (c) => {
-    const admin = needRole(c, 'admin');
+    const admin = needOwner(c);
     return c.json(await updateCategory(ctx, admin, c.req.param('slug'), parse(categoryPatch, await jsonBody(c.req.raw))));
   });
   app.get('/v1/admin/config', async (c) => {
@@ -380,14 +391,39 @@ export function createApp(deps: Deps) {
     return c.json({ items: await adminConfig(ctx) });
   });
   app.put('/v1/admin/config/:key', async (c) => {
-    const admin = needRole(c, 'admin');
+    const admin = needOwner(c);
     const b = parse(configBody, await jsonBody(c.req.raw));
     return c.json(await setConfig(ctx, admin, c.req.param('key'), b.value));
   });
   app.delete('/v1/admin/config/:key', async (c) => {
-    const admin = needRole(c, 'admin');
+    const admin = needOwner(c);
     return c.json(await resetConfig(ctx, admin, c.req.param('key')));
   });
+  // ---- equipe da operação
+  app.get('/v1/admin/team', async (c) => c.json(await listTeam(ctx, needRole(c, 'admin'))));
+  app.post('/v1/admin/team/invites', async (c) => {
+    const owner = needOwner(c);
+    const b = parse(inviteBody, await jsonBody(c.req.raw));
+    return c.json(await inviteMember(ctx, owner, { fullName: b.full_name, phone: b.phone, level: b.level }), 201);
+  });
+  app.delete('/v1/admin/team/invites/:id', async (c) => {
+    await revokeInvite(ctx, needOwner(c), parse(uuid, c.req.param('id')));
+    return c.body(null, 204);
+  });
+  app.put('/v1/admin/team/members/:id', async (c) => {
+    const owner = needOwner(c);
+    const b = parse(levelBody, await jsonBody(c.req.raw));
+    return c.json(await setMemberLevel(ctx, owner, parse(uuid, c.req.param('id')), b.level));
+  });
+  app.post('/v1/admin/team/members/:id/deactivate', async (c) => c.json(await setMemberStatus(ctx, needOwner(c), parse(uuid, c.req.param('id')), 'deactivate')));
+  app.post('/v1/admin/team/members/:id/reactivate', async (c) => c.json(await setMemberStatus(ctx, needOwner(c), parse(uuid, c.req.param('id')), 'reactivate')));
+  app.post('/v1/admin/accept-invite', async (c) => {
+    if (c.get('user')) throw conflict('already_registered', 'Este usuário já está cadastrado');
+    const identity = c.get('identity');
+    if (!identity) throw new ApiError(401, 'unauthenticated', 'Faça login para continuar');
+    return c.json(await acceptInvite(ctx, identity), 201);
+  });
+
   app.get('/v1/admin/audit', async (c) => {
     needRole(c, 'admin');
     const limit = parse(z.coerce.number().int().min(1).max(200).default(50), query(c).limit);

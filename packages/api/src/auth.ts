@@ -34,10 +34,14 @@ export function authenticatorFrom(identify: Identify, sql: Sql): Authenticate {
   return async (req) => {
     const identity = await identify(req);
     if (!identity) return null;
-    const rows = await sql`SELECT id, role, status FROM users WHERE id = ${identity.id}`;
+    const rows = await sql`SELECT id, role, status, admin_level FROM users WHERE id = ${identity.id}`;
     const u = rows[0];
     if (!u || u.status !== 'active') return null;
-    return { id: u.id as string, role: u.role as 'client' | 'professional' | 'admin' };
+    return {
+      id: u.id as string,
+      role: u.role as 'client' | 'professional' | 'admin',
+      ...(u.role === 'admin' ? { adminLevel: (u.admin_level as 'owner' | 'operator' | null) ?? 'operator' } : {}),
+    };
   };
 }
 

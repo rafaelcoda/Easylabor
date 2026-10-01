@@ -12,6 +12,7 @@ const NAV = [
   { href: '/profissionais/', label: 'Profissionais' },
   { href: '/clientes/', label: 'Clientes' },
   { href: '/verificacao/', label: 'Verificação' },
+  { href: '/equipe/', label: 'Equipe' },
   { href: '/plataforma/', label: 'Plataforma' },
 ];
 const isOn = (path: string, href: string) => path === href || path === href.slice(0, -1) || (href !== '/' && path.startsWith(href.slice(0, -1)));
@@ -32,7 +33,7 @@ export function Shell({ title, subtitle, children }: { title: string; subtitle?:
       <div className="login card">
         <div className="logo-head"><img src="/simbolo.svg" alt="" /><div><div className="t">Easylabor</div><div className="s">Operação</div></div></div>
         <h1>Acesso restrito</h1>
-        <p className="muted">Esta área é só da operação. Sua conta não tem permissão de administrador.</p>
+        <p className="muted">{state.noInvite ? 'Este telefone não tem convite para a equipe da operação. Peça a um administrador para convidar você e entre de novo.' : 'Esta área é só da operação. Sua conta não tem permissão de acesso.'}</p>
         <button className="btn sec" onClick={signOut}>Sair</button>
       </div>
     );

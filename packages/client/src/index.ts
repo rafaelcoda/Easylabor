@@ -10,6 +10,8 @@ export type BookingStatus =
   | 'completed' | 'approved' | 'disputed' | 'paid' | 'refunded'
   | 'cancelled_by_client' | 'cancelled_by_professional' | 'no_show_professional' | 'no_show_client';
 
+export type AdminLevel = 'owner' | 'operator';
+
 export interface Me {
   registered: boolean;
   id: string;
@@ -17,6 +19,8 @@ export interface Me {
   full_name?: string;
   phone: string | null;
   next_step: string;
+  /** Só para administradores. */
+  admin_level?: AdminLevel;
   client?: { kind: string | null; addresses: number };
   professional?: { profile_complete: boolean; kyc_status?: string; visible?: boolean; radius_km?: number; level?: string; offers?: number };
 }
@@ -221,6 +225,20 @@ export interface AdminSetting {
   min: number; max: number; default: number; value: number; custom: boolean; updated_at: string | null; updated_by_name: string | null;
 }
 
+export interface TeamMember {
+  id: string; full_name: string; phone: string; status: AccountStatus; level: AdminLevel; created_at: string; actions_30d: number; last_action: string | null;
+}
+export interface TeamInvite {
+  id: string; phone: string; full_name: string; level: AdminLevel; created_at: string; expires_at: string; expired: boolean; invited_by_name: string;
+}
+export interface TeamOverview { me: { id: string; level: AdminLevel }; members: TeamMember[]; invites: TeamInvite[] }
+
+export const LEVEL_NAME: Record<AdminLevel, string> = { owner: 'Administrador', operator: 'Operador' };
+export const LEVEL_HELP: Record<AdminLevel, string> = {
+  owner: 'Tudo: equipe, serviços, parâmetros e a rotina da operação.',
+  operator: 'Rotina: verificar cadastros, suspender contas, ocultar da busca e consultar. Não altera equipe, serviços nem parâmetros.',
+};
+
 export const KYC_LABEL: Record<string, string> = { pending: 'Aguardando verificação', in_review: 'Em análise', approved: 'Aprovado', rejected: 'Reprovado', incomplete: 'Cadastro incompleto' };
 export const ACCOUNT_STATUS_LABEL: Record<AccountStatus, string> = { active: 'Ativa', suspended: 'Suspensa', deleted: 'Excluída' };
 export const STRIKE_KIND_LABEL: Record<string, string> = { cancellation: 'Cancelamento', no_show: 'Ausência', conduct: 'Conduta' };
@@ -228,6 +246,8 @@ export const LEVEL_LABEL: Record<string, string> = { bronze: 'Bronze', silver: '
 export const AUDIT_LABEL: Record<string, string> = {
   'user.suspended': 'Conta suspensa', 'user.reactivated': 'Conta reativada', 'user.deleted': 'Conta excluída pelo próprio usuário', 'user.promoted_to_admin': 'Promovido a administrador',
   'professional.hidden': 'Ocultado da busca', 'professional.shown': 'Exibido na busca', 'kyc.decision': 'Decisão de verificação',
+  'team.invited': 'Convite enviado', 'team.invite_revoked': 'Convite cancelado', 'team.invite_accepted': 'Convite aceito', 'team.level_changed': 'Nível de acesso alterado',
+  'team.deactivated': 'Acesso desativado', 'team.reactivated': 'Acesso reativado',
   'category.created': 'Serviço criado', 'category.updated': 'Serviço alterado', 'config.updated': 'Parâmetro alterado', 'config.reset': 'Parâmetro restaurado ao padrão',
 };
 export const auditLabel = (action: string) => AUDIT_LABEL[action] ?? action;
@@ -354,6 +374,14 @@ export function createClient(opts: ClientOptions) {
     resetConfigValue: (key: string) => call<{ key: string; value: number }>('DELETE', `/v1/admin/config/${key}`),
     adminAudit: (limit = 50) => call<{ items: AuditItem[] }>('GET', `/v1/admin/audit${qs({ limit })}`).then((r) => r.items),
 
+    adminTeam: () => call<TeamOverview>('GET', '/v1/admin/team'),
+    inviteMember: (b: { full_name: string; phone: string; level: AdminLevel }) => call<{ id: string; phone: string; level: AdminLevel; expires_at: string }>('POST', '/v1/admin/team/invites', b),
+    revokeInvite: (id: string) => call<void>('DELETE', `/v1/admin/team/invites/${id}`),
+    setMemberLevel: (id: string, level: AdminLevel) => call<{ id: string; level: AdminLevel }>('PUT', `/v1/admin/team/members/${id}`, { level }),
+    deactivateMember: (id: string) => call<{ id: string; status: AccountStatus }>('POST', `/v1/admin/team/members/${id}/deactivate`, {}),
+    reactivateMember: (id: string) => call<{ id: string; status: AccountStatus }>('POST', `/v1/admin/team/members/${id}/reactivate`, {}),
+    /** Chamado no primeiro login de quem foi convidado para a equipe. */
+    acceptInvite: () => call<{ id: string; role: 'admin'; level: AdminLevel }>('POST', '/v1/admin/accept-invite', {}),
     kycQueue: () => call<{ items: KycItem[] }>('GET', '/v1/admin/kyc/queue').then((r) => r.items),
     kycDecision: (userId: string, decision: 'approve' | 'reject', reason?: string) =>
       call<{ user_id: string; kyc_status: string }>('POST', `/v1/admin/kyc/${userId}/decision`, { decision, reason }),
