@@ -1,5 +1,6 @@
 import { DEFAULT_CONFIG } from '@diaria/core';
 import { createSql } from '../packages/api/src/db';
+import { easy365FromEnv } from '../packages/api/src/integrations/easy365';
 import { runJobs, type JobSummary } from '../packages/api/src/jobs';
 import { createMockProvider } from '../packages/api/src/payments/provider';
 import { loadConfig } from '../packages/api/src/services/settings';
@@ -16,7 +17,7 @@ export async function runScheduled(): Promise<JobSummary | { skipped: string }> 
   if (!databaseUrl) return { skipped: 'DATABASE_URL ausente' };
   const sql = createSql(databaseUrl, { max: 1, prepare: false, idle_timeout: 5, connect_timeout: 10, connection: {} });
   try {
-    return await runJobs({ sql, now: () => new Date(), config: await loadConfig(sql, DEFAULT_CONFIG), provider: createMockProvider(), verifyPhotoUploads: false }, { payouts: false });
+    return await runJobs({ sql, now: () => new Date(), config: await loadConfig(sql, DEFAULT_CONFIG), provider: createMockProvider(), verifyPhotoUploads: false, easy365: easy365FromEnv((n) => Netlify.env.get(n)) }, { payouts: false });
   } finally {
     await sql.end({ timeout: 2 }).catch(() => undefined);
   }

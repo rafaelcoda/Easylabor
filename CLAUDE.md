@@ -32,7 +32,7 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 - Toda mudança de código vem com teste. Rode `npm test` e `npm run typecheck` antes de commitar.
 
 ## Infraestrutura
-- Migrações aplicadas no Supabase: 0001 a 0006 (0005 = disponibilidade semanal; 0006 = equipe e níveis de acesso).
+- Migrações aplicadas no Supabase: 0001 a 0007 (0005 = disponibilidade semanal; 0006 = equipe e níveis de acesso; 0007 = colaboradores e execuções da carga).
 - Banco: Supabase, projeto **EasyLabor** (`hbyzutbpkzaiuutgiaqs`, região São Paulo). RLS ligado em todas as tabelas, sem políticas: só o servidor acessa, com credencial de servidor.
 - API: Netlify, site `easylabor-api` (`https://easylabor-api.netlify.app`). Publica sozinho a cada commit na `main`.
 - Variáveis no Netlify: `DATABASE_URL` (secreta, string do Transaction pooler, porta 6543, usuário `postgres.<projeto>`), `SUPABASE_URL`, `SUPABASE_ANON_KEY`.
@@ -52,6 +52,12 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 - Rotas de administrador usam `needRole(c, 'admin')` (rotina) ou `needOwner(c)` (equipe, serviços e parâmetros). Ao criar uma rota nova que altera regras do negócio ou acessos, use `needOwner`.
 - Nunca criar um admin por fora do convite, a não ser por SQL numa emergência (e gravar `admin_level`). O convite exige telefone sem conta.
 - Os convites de teste dependem do código por SMS: com números de teste do Supabase (código fixo) qualquer pessoa que conheça o código entra. Em produção, convide só com telefones reais.
+
+## Integração Easy365 (colaboradores)
+- Código: `packages/api/src/integrations/easy365.ts` (cliente) e `services/collaborators.ts` (mapeamento, gravação, agendamento, vínculo). Teste sem rede: `test/easy365.test.ts` e `test/collaborators.test.ts` usam um cliente falso.
+- Credenciais só em variáveis secretas do Netlify (`EASY365_CLIENT_ID`/`EASY365_CLIENT_SECRET`). Nunca em código, arquivo, log ou chat. Preferir uma credencial de serviço própria da integração, com acesso só aos contratos necessários.
+- Salário e ficha médica ficam em `collaborator_private` e não podem ser expostos por nenhuma rota sem decisão explícita (LGPD: dado sensível e finalidade diferente).
+- A API não devolve telefone: o vínculo com a conta do profissional é feito pela operação (celular informado no painel).
 
 ## Fotos (Supabase Storage)
 - Bucket privado `booking-photos`; caminho obrigatório `<usuário>/<pedido>/<arquivo>` (função `photoPath` em `packages/client`).

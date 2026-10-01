@@ -2,6 +2,7 @@ import { DEFAULT_CONFIG } from '@diaria/core';
 import { createApp } from '../src/app';
 import { createMockProvider, type PaymentProvider } from '../src/payments/provider';
 import { createSql, type Sql } from '../src/db';
+import type { Easy365Client } from '../src/integrations/easy365';
 import type { AuthUser } from '../src/types';
 import { TEST_DB } from './globalSetup';
 
@@ -17,7 +18,7 @@ export function makeSql(): Sql {
   });
 }
 
-export function makeApp(sql: Sql, devRoutes = true, paymentProvider?: PaymentProvider, extra: { verifyPhotoUploads?: boolean; dbConfig?: boolean } = {}) {
+export function makeApp(sql: Sql, devRoutes = true, paymentProvider?: PaymentProvider, extra: { verifyPhotoUploads?: boolean; dbConfig?: boolean; easy365?: Easy365Client } = {}) {
   return createApp({
     sql,
     devRoutes,

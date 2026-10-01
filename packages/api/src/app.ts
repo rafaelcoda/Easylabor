@@ -15,6 +15,7 @@ import {
   platformOverview, resetConfig, setConfig, setProfessionalVisible, setUserStatus, updateCategory,
 } from './services/manage';
 import { loadConfig } from './services/settings';
+import { adminCollaborators, linkCollaborator, requestSync, syncRuns, unlinkCollaborator } from './services/collaborators';
 import { acceptInvite, inviteMember, listTeam, revokeInvite, setMemberLevel, setMemberStatus } from './services/team';
 import { handlePaymentEvent } from './services/payments';
 import { searchProfessionals } from './services/search';
@@ -88,6 +89,13 @@ const categoryCreate = z.object({
   min_photos_checkout: z.number().int().min(0).max(10).default(1),
 });
 const configBody = z.object({ value: z.number().int() });
+const collabQuery = z.object({
+  ...pageQuery,
+  status: z.string().max(30).optional(),
+  contract: z.string().max(40).optional(),
+  view: z.enum(['linked', 'waiting', 'unlinked', 'missing']).optional(),
+});
+const linkBody = z.object({ phone: z.string().trim().min(8).max(30) });
 const levelSchema = z.enum(['owner', 'operator']);
 const inviteBody = z.object({ full_name: z.string().trim().min(3, 'informe o nome').max(120), phone: z.string().trim().min(8).max(30), level: levelSchema.default('operator') });
 const levelBody = z.object({ level: levelSchema });
@@ -177,6 +185,7 @@ export function createApp(deps: Deps) {
     config: deps.config ?? DEFAULT_CONFIG,
     provider: deps.paymentProvider ?? createMockProvider(),
     verifyPhotoUploads: deps.verifyPhotoUploads ?? false,
+    easy365: deps.easy365,
   };
   const app = new Hono<Env>();
 
@@ -399,6 +408,27 @@ export function createApp(deps: Deps) {
     const admin = needOwner(c);
     return c.json(await resetConfig(ctx, admin, c.req.param('key')));
   });
+  // ---- colaboradores (carga do Protheus via Easy365)
+  app.get('/v1/admin/collaborators', async (c) => {
+    needRole(c, 'admin');
+    const q = parse(collabQuery, query(c));
+    return c.json(await adminCollaborators(ctx, { q: q.q, status: q.status, contract: q.contract, view: q.view }, q.limit, q.offset));
+  });
+  app.get('/v1/admin/collaborators/sync-runs', async (c) => {
+    needRole(c, 'admin');
+    return c.json({ items: await syncRuns(ctx, 15) });
+  });
+  app.post('/v1/admin/collaborators/sync', async (c) => c.json(await requestSync(ctx, needOwner(c)), 202));
+  app.put('/v1/admin/collaborators/:id/link', async (c) => {
+    const owner = needOwner(c);
+    const b = parse(linkBody, await jsonBody(c.req.raw));
+    return c.json(await linkCollaborator(ctx, owner, parse(uuid, c.req.param('id')), b.phone));
+  });
+  app.delete('/v1/admin/collaborators/:id/link', async (c) => {
+    await unlinkCollaborator(ctx, needOwner(c), parse(uuid, c.req.param('id')));
+    return c.body(null, 204);
+  });
+
   // ---- equipe da operação
   app.get('/v1/admin/team', async (c) => c.json(await listTeam(ctx, needRole(c, 'admin'))));
   app.post('/v1/admin/team/invites', async (c) => {

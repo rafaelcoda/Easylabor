@@ -13,10 +13,10 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 | `packages/core` | Regras de negócio puras em TypeScript: preço, antecipação, máquina de estados do pedido, cancelamento e no-show, check-in por GPS, ranking, ledger em partidas dobradas, prazos. **44 testes passando.** |
 | `db/migrations` | Esquema PostgreSQL + PostGIS com as 27 tabelas da especificação, travas de integridade (horários sobrepostos, ledger balanceado, tabelas só de inserção). **15 testes SQL passando.** |
 | Banco na nuvem | Projeto **EasyLabor** no Supabase (região São Paulo, `sa-east-1`) com o esquema, o RLS e o seed aplicados. Ver seção abaixo. |
-| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **15 testes passando.** |
+| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **16 testes passando.** |
 | `apps/panel` | Painel web da operação (Next.js). Compila. |
 | `apps/mobile` | App em Expo (cliente e profissional). Tipos ok e empacotamento Android ok; **não testado em aparelho**. |
-| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **125 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
+| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **168 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
 | `netlify/` | Função que expõe a API na Netlify (`handler.ts` + `functions/api.mts`). Site `easylabor-api` ligado ao GitHub. |
 
 
@@ -50,7 +50,7 @@ pedidos), **Agenda** (profissionais x pedidos por hora, mais as ofertas aguardan
 estado), **Profissionais** (lista com filtros por verificação, serviço e visibilidade; detalhe com desempenho, advertências, pedidos e
 histórico; aprovar, reprovar, ocultar da busca, suspender e reativar), **Clientes** (lista e detalhe com pedidos, valor contratado e
 suspensão), **Verificação** (fila de aprovação) e **Plataforma** (indicadores e filas de atenção, serviços e faixas de diária,
-parâmetros de negócio editáveis e registro de auditoria) e **Equipe** (membros, níveis de acesso e convites). Só entra quem tem conta de **admin**.
+parâmetros de negócio editáveis e registro de auditoria) e **Equipe** (membros, níveis de acesso e convites) e **Colaboradores** (carga do Protheus, vínculo com o celular e situação). Só entra quem tem conta de **admin**.
 
 - Rodar: `cd apps/panel && npm install && npm run dev` (abre em `http://localhost:3001`).
 - Os endereços públicos (API, Supabase e chave pública) estão em `apps/panel/src/lib/config.ts`. Nenhum segredo.
@@ -103,6 +103,21 @@ Erros seguem o formato `{ error: { code, message, details, request_id } }` da es
 **Ainda não feito na API:** `Idempotency-Key`, reenvio automático ao próximo profissional após recusa ou prazo vencido
 (depende dos jobs da sprint 3), disputa, avaliações, chat, upload de arquivos, cadastro e KYC do profissional,
 antecipação, rotas de admin e webhooks reais do provedor.
+
+**Carga diária de colaboradores (Easy365/Protheus):** a função agendada (`jobs`, a cada 5 min) chama a API Easy365 (`GET /collaborators`)
+e grava em `collaborators` (um registro por colaborador, chave `external_id`). Autenticação: `POST /auth/login` com `id` e `secret`
+gera o Bearer (o cliente renova sozinho e tenta de novo uma vez se receber 401); com só `EASY365_API_KEY` envia `X-Api-Key`.
+Variáveis do Netlify (site da API, **secretas**): `EASY365_CLIENT_ID`, `EASY365_CLIENT_SECRET` (ou `EASY365_API_KEY`) e, se preciso,
+`EASY365_API_URL` (padrão `https://easy365-api.fly.dev`). Sem elas a integração fica desligada e o painel avisa.
+Regras: começa depois das 03h de São Paulo e faz uma carga bem-sucedida por dia (até 5 tentativas, 15 min de espera após erro);
+cada rodada tem 20 s de limite e, se não terminar, fica **parcial** com o cursor salvo e continua na rodada seguinte; "Sincronizar
+agora" no painel entra na fila. Só grava o que mudou (`payload_hash`). Quem deixa de vir na API recebe `missing_since`; travas:
+lista vazia, ou menos da metade dos conhecidos, é erro e não marca ninguém. Salário e ficha médica vão para `collaborator_private`
+(sem nenhuma rota que os leia); campos novos da API ficam em `extra`. Paginação: o cursor é procurado em cabeçalhos
+(`X-Next-Cursor`...), no `Link` e no corpo; se a API devolver página cheia sem cursor a carga para com erro explicando. Vínculo: a
+operação informa o celular do colaborador (`PUT /v1/admin/collaborators/:id/link`); ao se cadastrar como profissional com esse
+celular o vínculo é automático. Desligado ou fora da base não vincula, e um profissional vinculado que for desligado some da busca
+(registro `collaborator.auto_hidden`). Migração `0007_collaborators.sql` (já aplicada no Supabase).
 
 **Equipe da operação:** `users.admin_level` define dois níveis para `role = 'admin'`: **owner** (Administrador: tudo, inclusive equipe,
 serviços e parâmetros) e **operator** (Operador: rotina; consulta tudo, verifica cadastros, suspende contas e oculta da busca). Admin

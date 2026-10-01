@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, categoryName, createClient, eventLabel, PAYMENT_STATUS_LABEL, WEEKDAYS, auditLabel, formatSetting, LEVEL_NAME, LEVEL_HELP, errorMessage, formatBRL, photoPath } from '../src';
+import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, categoryName, createClient, eventLabel, PAYMENT_STATUS_LABEL, WEEKDAYS, auditLabel, formatSetting, LEVEL_NAME, LEVEL_HELP, COLLABORATOR_STATUS_LABEL, SYNC_STATUS_LABEL, errorMessage, formatBRL, photoPath } from '../src';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const make = (impl: (url: string, init: RequestInit) => Response | Promise<Response>, token: string | null = 'tok') => {
@@ -151,5 +151,23 @@ describe('cliente da API', () => {
     expect(LEVEL_NAME).toEqual({ owner: 'Administrador', operator: 'Operador' });
     expect(LEVEL_HELP.operator).toMatch(/Não altera equipe/);
     expect(auditLabel('team.invited')).toBe('Convite enviado');
+  });
+
+  it('colaboradores: consultas, vínculo e carga manual', async () => {
+    const { f, api } = make(() => json(200, { items: [] }));
+    await api.adminCollaborators({ q: 'maria', view: 'waiting', contract: 'CT-1', limit: 25, offset: 50 });
+    expect(f.mock.calls[0]![0]).toBe('https://api.test/v1/admin/collaborators?q=maria&view=waiting&contract=CT-1&limit=25&offset=50');
+    await api.collaboratorSyncRuns();
+    expect(f.mock.calls[1]![0]).toBe('https://api.test/v1/admin/collaborators/sync-runs');
+    await api.requestCollaboratorSync();
+    expect([f.mock.calls[2]![0], f.mock.calls[2]![1].method]).toEqual(['https://api.test/v1/admin/collaborators/sync', 'POST']);
+    await api.linkCollaborator('c1', '(27) 99888-1122');
+    expect([f.mock.calls[3]![0], f.mock.calls[3]![1].method]).toEqual(['https://api.test/v1/admin/collaborators/c1/link', 'PUT']);
+    expect(JSON.parse(f.mock.calls[3]![1].body as string)).toEqual({ phone: '(27) 99888-1122' });
+    await api.unlinkCollaborator('c1');
+    expect(f.mock.calls[4]![1].method).toBe('DELETE');
+    expect(COLLABORATOR_STATUS_LABEL.FIRED).toBe('Desligado');
+    expect(SYNC_STATUS_LABEL.error).toBe('Com erro');
+    expect(auditLabel('collaborator.auto_linked')).toMatch(/automático/);
   });
 });

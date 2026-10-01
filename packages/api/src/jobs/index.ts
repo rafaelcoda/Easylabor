@@ -1,6 +1,7 @@
 import { ApiError } from '../errors';
 import { applyAction, redirectOffer } from '../services/bookings';
 import { materializeWeekly, spToday } from '../services/accounts';
+import { collaboratorSyncTick } from '../services/collaborators';
 import { runPayouts, sendRefunds } from '../services/payments';
 import type { Ctx } from '../types';
 
@@ -11,6 +12,8 @@ export interface JobSummary {
   no_shows: number;
   auto_approved: number;
   weekly_extended: number;
+  /** Resultado da rodada da carga de colaboradores (idle, started, ok, partial, error...). */
+  collaborator_sync: string;
   refunds_sent: number;
   payouts_sent: number;
   skipped: number;
@@ -27,7 +30,7 @@ export interface JobOptions {
  * então rodar duas vezes seguidas não duplica nada.
  */
 export async function runJobs(ctx: Ctx, opts: JobOptions): Promise<JobSummary> {
-  const s: JobSummary = { expired_payments: 0, resent_offers: 0, expired_offers: 0, no_shows: 0, auto_approved: 0, weekly_extended: 0, refunds_sent: 0, payouts_sent: 0, skipped: 0, errors: 0 };
+  const s: JobSummary = { expired_payments: 0, resent_offers: 0, expired_offers: 0, no_shows: 0, auto_approved: 0, weekly_extended: 0, collaborator_sync: 'idle', refunds_sent: 0, payouts_sent: 0, skipped: 0, errors: 0 };
   const now = ctx.now();
   const iso = (d: Date) => d.toISOString();
 
@@ -92,7 +95,10 @@ export async function runJobs(ctx: Ctx, opts: JobOptions): Promise<JobSummary> {
   // 5. Disponibilidade semanal: mantém sempre os próximos 28 dias preenchidos
   s.weekly_extended = await materializeWeekly(ctx.sql, spToday(ctx));
 
-  // 6. Estornos pendentes e 7. repasses vencidos
+  // 6. Carga diária de colaboradores (Easy365/Protheus). Uma falha aqui não atrapalha as outras rotinas.
+  s.collaborator_sync = await collaboratorSyncTick(ctx).catch((e) => { console.error('collaborator_sync', e); return 'error'; });
+
+  // 7. Estornos pendentes e 8. repasses vencidos
   s.refunds_sent = await sendRefunds(ctx);
   if (opts.payouts) s.payouts_sent = await runPayouts(ctx);
   return s;

@@ -49,7 +49,8 @@ export async function adminProfessionals(ctx: Ctx, f: ProFilter, limit: number, 
            (SELECT coalesce(json_agg(json_build_object('category', c.slug, 'rate_cents', o.daily_rate_cents) ORDER BY c.name), '[]'::json)
               FROM service_offers o JOIN service_categories c ON c.id = o.category_id WHERE o.professional_id = u.id AND o.active) AS offers,
            (SELECT count(*)::int FROM strikes s WHERE s.user_id = u.id AND s.expires_at > now()) AS active_strikes,
-           (SELECT count(*)::int FROM bookings b WHERE b.professional_id = u.id) AS bookings_total
+           (SELECT count(*)::int FROM bookings b WHERE b.professional_id = u.id) AS bookings_total,
+           EXISTS (SELECT 1 FROM collaborators c WHERE c.user_id = u.id) AS is_collaborator
     FROM users u LEFT JOIN professional_profiles p ON p.user_id = u.id
     WHERE ${where} ORDER BY u.created_at DESC, u.id LIMIT ${limit} OFFSET ${offset}`;
   const total = (await ctx.sql`SELECT count(*)::int AS n FROM users u LEFT JOIN professional_profiles p ON p.user_id = u.id WHERE ${where}`)[0]!.n as number;
@@ -69,7 +70,7 @@ export async function adminProfessionals(ctx: Ctx, f: ProFilter, limit: number, 
       id: r.id, full_name: r.full_name, phone: r.phone, status: r.status, created_at: iso(r.created_at),
       has_profile: r.has_profile, kyc_status: r.kyc_status ?? null, visible: r.visible ?? false, radius_km: r.radius_km ?? null, level: r.level ?? null,
       rating_avg: num(r.rating_avg), rating_count: num(r.rating_count), completed_count: num(r.completed_count),
-      weekly_days: num(r.weekly_days), offers: r.offers, active_strikes: r.active_strikes, bookings_total: r.bookings_total,
+      weekly_days: num(r.weekly_days), offers: r.offers, active_strikes: r.active_strikes, bookings_total: r.bookings_total, is_collaborator: r.is_collaborator,
     })),
   };
 }
@@ -92,7 +93,14 @@ export async function adminProfessionalDetail(ctx: Ctx, id: string) {
     FROM bookings b JOIN service_categories c ON c.id = b.category_id JOIN users cu ON cu.id = b.client_id
     WHERE b.professional_id = ${id} ORDER BY b.starts_at DESC LIMIT 15`;
   const history = await adminAudit(ctx, { entityId: id, limit: 15 });
+  const col = (await ctx.sql`
+    SELECT register, status, contract_name, contract_branch, role_title, position_title, work_shift_label, work_shift_notation_rule, hired_on::text AS hired_on, missing_since
+    FROM collaborators WHERE user_id = ${id}`)[0];
   return {
+    collaborator: col ? {
+      register: col.register, status: col.status, contract: col.contract_name, branch: col.contract_branch, role: col.role_title, position: col.position_title,
+      work_shift: col.work_shift_label, notation_rule: col.work_shift_notation_rule, hired_on: col.hired_on, missing_since: iso(col.missing_since),
+    } : null,
     user: { id: u.id, full_name: u.full_name, phone: u.phone, email: u.email, status: u.status, created_at: iso(u.created_at), terms_version: u.accepted_terms_version },
     profile: p ? {
       bio: p.bio, radius_km: p.radius_km, pix_key_masked: maskPix(String(p.pix_key)), lat: Number(p.lat), lng: Number(p.lng),

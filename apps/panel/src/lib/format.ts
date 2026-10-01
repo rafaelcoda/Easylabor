@@ -32,3 +32,6 @@ export function phoneBR(p: string): string {
   return p;
 }
 export const dayShort = (day: string) => day.split('-').reverse().slice(0, 2).join('/');
+
+/** "2022-03-14" -> "14/03/2022" (data sem hora). */
+export const dateOnlyBR = (d: string) => d.slice(0, 10).split('-').reverse().join('/');

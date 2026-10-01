@@ -1,12 +1,13 @@
 import type { Config } from '@diaria/core';
 import type { Sql } from './db';
+import type { Easy365Client } from './integrations/easy365';
 import type { PaymentProvider } from './payments/provider';
 
 export type Role = 'client' | 'professional' | 'admin';
 
-/** Usuário já cadastrado em public.users. */
 export type AdminLevel = 'owner' | 'operator';
 
+/** Usuário já cadastrado em public.users. */
 export interface AuthUser {
   id: string;
   role: Role;
@@ -35,6 +36,8 @@ export interface Deps {
   paymentProvider?: PaymentProvider;
   /** Origens de navegador autorizadas a chamar a API (painel web). Vazio = nenhuma. */
   corsOrigins?: string[];
+  /** Cliente da API Easy365 (carga diária de colaboradores). Ausente = integração não configurada. */
+  easy365?: Easy365Client;
   /** Lê os parâmetros alterados no painel (tabela config_settings) a cada requisição. Ligado em produção. */
   dbConfig?: boolean;
   /** Confere no armazenamento do Supabase se as fotos do check-out foram mesmo enviadas. Ligado em produção. */
@@ -49,4 +52,6 @@ export interface Ctx {
   config: Config;
   provider: PaymentProvider;
   verifyPhotoUploads: boolean;
+  /** Cliente da API Easy365 (carga diária de colaboradores). Ausente = integração não configurada. */
+  easy365?: Easy365Client;
 }

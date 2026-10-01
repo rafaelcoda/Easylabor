@@ -44,6 +44,17 @@ export async function register(ctx: Ctx, identity: Identity, input: RegisterInpu
       const cnpj = kind === 'company' ? (input.cnpj ?? '').replace(/\D/g, '') : null;
       await tx`INSERT INTO client_profiles (user_id, kind, cnpj) VALUES (${identity.id}, ${kind}, ${cnpj})`;
     }
+    if (input.role === 'professional') {
+      // Se a operação reservou este celular para um colaborador (carga do Protheus), o vínculo é feito agora.
+      const linked = await tx`
+        UPDATE collaborators SET user_id = ${identity.id}, link_phone = NULL, linked_at = ${now}::timestamptz
+        WHERE link_phone = ${phone} AND user_id IS NULL RETURNING id, name`;
+      if (linked[0]) {
+        await tx`
+          INSERT INTO audit_logs (actor_id, action, entity, entity_id, after)
+          VALUES (${identity.id}, 'collaborator.auto_linked', 'collaborators', ${linked[0].id as string}, ${tx.json({ name: linked[0].name } as never)})`;
+      }
+    }
   });
   return getMe(ctx, { id: identity.id, role: input.role });
 }

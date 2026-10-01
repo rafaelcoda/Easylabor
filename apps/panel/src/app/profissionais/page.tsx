@@ -67,7 +67,7 @@ export default function Profissionais() {
                 const st = proState(r);
                 return (
                   <tr key={r.id} className="click" onClick={() => router.push(`/profissional/?id=${r.id}`)}>
-                    <td><Link className="plain" href={`/profissional/?id=${r.id}`} onClick={(e) => e.stopPropagation()}>{r.full_name}</Link><div className="sub-line nowrap">{phoneBR(r.phone)}</div></td>
+                    <td><Link className="plain" href={`/profissional/?id=${r.id}`} onClick={(e) => e.stopPropagation()}>{r.full_name}</Link>{r.is_collaborator && <span className="pill-custom" style={{ background: '#e6f5fb', color: '#1f6aae' }}>colaborador</span>}<div className="sub-line nowrap">{phoneBR(r.phone)}</div></td>
                     <td><div className="tags">{r.offers.length === 0 ? <span className="muted">–</span> : r.offers.map((o) => <span key={o.category} className="tag">{categoryName(o.category)} · {formatBRL(o.rate_cents)}</span>)}</div></td>
                     <td>{r.radius_km ? `${r.radius_km} km` : '–'}{r.level && <div className="sub-line">{LEVEL_LABEL[r.level] ?? r.level}</div>}</td>
                     <td>{r.rating_count > 0 ? `★ ${r.rating_avg.toFixed(1).replace('.', ',')} (${r.rating_count})` : <span className="muted">Novo</span>}</td>

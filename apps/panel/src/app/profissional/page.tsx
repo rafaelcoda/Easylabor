@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import {
-  ACCOUNT_STATUS_LABEL, KYC_LABEL, LEVEL_LABEL, STRIKE_KIND_LABEL, WEEKDAYS, auditLabel, categoryName, errorMessage, formatBRL,
+  ACCOUNT_STATUS_LABEL, COLLABORATOR_STATUS_LABEL, KYC_LABEL, LEVEL_LABEL, STRIKE_KIND_LABEL, WEEKDAYS, auditLabel, categoryName, errorMessage, formatBRL,
 } from '../../../../../packages/client/src';
 import { Shell } from '@/components/Shell';
 import { Badge, Facts, StatusBadge, useLoad } from '@/components/ui';
-import { dateBR, dateTimeBR, phoneBR } from '@/lib/format';
+import { dateBR, dateOnlyBR, dateTimeBR, phoneBR } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { proState } from '@/lib/status';
 
@@ -29,7 +29,7 @@ function Detail() {
 
   if (d.error) return <Shell title="Profissional"><Link className="back" href="/profissionais/">‹ Profissionais</Link><p className="err">{d.error}</p></Shell>;
   if (!d.data) return <Shell title="Profissional"><p className="muted">Carregando…</p></Shell>;
-  const { user, profile, offers, weekly, strikes, bookings, history } = d.data;
+  const { user, profile, offers, weekly, strikes, bookings, history, collaborator } = d.data;
   const st = proState({ status: user.status, has_profile: profile !== null, kyc_status: profile?.kyc_status ?? null });
   const pending = profile && (profile.kyc_status === 'pending' || profile.kyc_status === 'in_review') && user.status === 'active';
 
@@ -72,6 +72,19 @@ function Detail() {
           ) : <p className="muted">O profissional ainda não completou o cadastro.</p>}
         </div>
       </div>
+
+      {collaborator && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h2 style={{ marginTop: 0 }}>Dados do colaborador (Protheus)</h2>
+          <Facts rows={[
+            ['Matrícula', collaborator.register], ['Situação', COLLABORATOR_STATUS_LABEL[collaborator.status] ?? collaborator.status],
+            ['Contrato', [collaborator.contract, collaborator.branch && `filial ${collaborator.branch}`].filter(Boolean).join(' · ') || null],
+            ['Cargo', collaborator.role], ['Posição', collaborator.position], ['Turno', [collaborator.work_shift, collaborator.notation_rule].filter(Boolean).join(' · ') || null],
+            ['Admissão', collaborator.hired_on ? dateOnlyBR(collaborator.hired_on) : null],
+          ]} />
+          {collaborator.missing_since && <div className="notice" style={{ marginTop: 12, marginBottom: 0 }}>Este colaborador deixou de aparecer na base do Protheus em {dateBR(collaborator.missing_since)}. Confira se ainda deve atuar na plataforma.</div>}
+        </div>
+      )}
 
       <div className="grid2">
         <div className="card">

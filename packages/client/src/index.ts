@@ -172,7 +172,7 @@ export interface AdminProfessionalRow {
   id: string; full_name: string; phone: string; status: AccountStatus; created_at: string;
   has_profile: boolean; kyc_status: string | null; visible: boolean; radius_km: number | null; level: string | null;
   rating_avg: number; rating_count: number; completed_count: number; weekly_days: number;
-  offers: { category: string; rate_cents: number }[]; active_strikes: number; bookings_total: number;
+  offers: { category: string; rate_cents: number }[]; active_strikes: number; bookings_total: number; is_collaborator: boolean;
 }
 export interface AdminProfessionalList {
   total: number;
@@ -184,6 +184,11 @@ export interface AuditItem {
   created_at: string; actor_name: string;
 }
 export interface AdminProfessionalDetail {
+  /** Dados vindos do Protheus, quando o profissional está vinculado a um colaborador. */
+  collaborator: {
+    register: string | null; status: string; contract: string | null; branch: string | null; role: string | null; position: string | null;
+    work_shift: string | null; notation_rule: string | null; hired_on: string | null; missing_since: string | null;
+  } | null;
   user: { id: string; full_name: string; phone: string; email: string | null; status: AccountStatus; created_at: string; terms_version: string | null };
   profile: {
     bio: string | null; radius_km: number; pix_key_masked: string; lat: number; lng: number; kyc_status: string; kyc_reason: string | null; visible: boolean; level: string;
@@ -239,6 +244,36 @@ export const LEVEL_HELP: Record<AdminLevel, string> = {
   operator: 'Rotina: verificar cadastros, suspender contas, ocultar da busca e consultar. Não altera equipe, serviços nem parâmetros.',
 };
 
+// ------------------------------------------------------------------ colaboradores (carga do Protheus)
+export type LinkState = 'none' | 'waiting' | 'linked';
+export interface CollaboratorRow {
+  id: string; external_id: string; register: string | null; name: string; status: string;
+  contract: { id: string | null; name: string | null; branch: string | null };
+  role_title: string | null; position_title: string | null; work_shift: { label: string | null; notation_rule: string | null }; degree: string | null;
+  hired_at: string | null; hired_on: string | null; fired_on: string | null; missing_since: string | null; last_seen_at: string | null;
+  link: { state: LinkState; phone: string | null; user_id: string | null; user_name: string | null; linked_at: string | null };
+}
+export type SyncStatus = 'queued' | 'running' | 'partial' | 'ok' | 'error';
+export interface SyncRun {
+  id: string; trigger: 'schedule' | 'manual'; status: SyncStatus; run_date: string; attempt: number; pages: number; fetched: number; created: number;
+  updated: number; unchanged: number; missing: number; pagination: string | null; error: string | null; requested_by_name: string | null;
+  created_at: string; started_at: string | null; finished_at: string | null;
+}
+export interface CollaboratorList {
+  total: number;
+  summary: { total: number; active: number; missing: number; linked: number; waiting: number };
+  contracts: { id: string; name: string | null; count: number }[];
+  statuses: { status: string; count: number }[];
+  sync: { configured: boolean; last: SyncRun | null };
+  items: CollaboratorRow[];
+}
+export type CollaboratorView = 'linked' | 'waiting' | 'unlinked' | 'missing';
+
+export const COLLABORATOR_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: 'Ativo', FIRED: 'Desligado', AWAY: 'Afastado', VACATION: 'Férias', TRANSFERRED: 'Transferido', INACTIVE: 'Inativo', UNKNOWN: 'Sem situação',
+};
+export const SYNC_STATUS_LABEL: Record<SyncStatus, string> = { queued: 'Na fila', running: 'Em andamento', partial: 'Em andamento (continua na próxima rodada)', ok: 'Concluída', error: 'Com erro' };
+
 export const KYC_LABEL: Record<string, string> = { pending: 'Aguardando verificação', in_review: 'Em análise', approved: 'Aprovado', rejected: 'Reprovado', incomplete: 'Cadastro incompleto' };
 export const ACCOUNT_STATUS_LABEL: Record<AccountStatus, string> = { active: 'Ativa', suspended: 'Suspensa', deleted: 'Excluída' };
 export const STRIKE_KIND_LABEL: Record<string, string> = { cancellation: 'Cancelamento', no_show: 'Ausência', conduct: 'Conduta' };
@@ -248,6 +283,8 @@ export const AUDIT_LABEL: Record<string, string> = {
   'professional.hidden': 'Ocultado da busca', 'professional.shown': 'Exibido na busca', 'kyc.decision': 'Decisão de verificação',
   'team.invited': 'Convite enviado', 'team.invite_revoked': 'Convite cancelado', 'team.invite_accepted': 'Convite aceito', 'team.level_changed': 'Nível de acesso alterado',
   'team.deactivated': 'Acesso desativado', 'team.reactivated': 'Acesso reativado',
+  'collaborator.linked': 'Colaborador vinculado a um celular', 'collaborator.unlinked': 'Vínculo de colaborador removido',
+  'collaborator.auto_linked': 'Vínculo automático no cadastro do profissional', 'collaborator.auto_hidden': 'Ocultado da busca: colaborador desligado ou fora da base', 'collaborators.sync_requested': 'Carga de colaboradores solicitada',
   'category.created': 'Serviço criado', 'category.updated': 'Serviço alterado', 'config.updated': 'Parâmetro alterado', 'config.reset': 'Parâmetro restaurado ao padrão',
 };
 export const auditLabel = (action: string) => AUDIT_LABEL[action] ?? action;
@@ -374,6 +411,12 @@ export function createClient(opts: ClientOptions) {
     resetConfigValue: (key: string) => call<{ key: string; value: number }>('DELETE', `/v1/admin/config/${key}`),
     adminAudit: (limit = 50) => call<{ items: AuditItem[] }>('GET', `/v1/admin/audit${qs({ limit })}`).then((r) => r.items),
 
+    adminCollaborators: (p: { q?: string; status?: string; contract?: string; view?: CollaboratorView; limit?: number; offset?: number } = {}) =>
+      call<CollaboratorList>('GET', `/v1/admin/collaborators${qs(p)}`),
+    collaboratorSyncRuns: () => call<{ items: SyncRun[] }>('GET', '/v1/admin/collaborators/sync-runs').then((r) => r.items),
+    requestCollaboratorSync: () => call<{ id: string; status: 'queued' }>('POST', '/v1/admin/collaborators/sync', {}),
+    linkCollaborator: (id: string, phone: string) => call<{ id: string; state: LinkState; phone: string | null }>('PUT', `/v1/admin/collaborators/${id}/link`, { phone }),
+    unlinkCollaborator: (id: string) => call<void>('DELETE', `/v1/admin/collaborators/${id}/link`),
     adminTeam: () => call<TeamOverview>('GET', '/v1/admin/team'),
     inviteMember: (b: { full_name: string; phone: string; level: AdminLevel }) => call<{ id: string; phone: string; level: AdminLevel; expires_at: string }>('POST', '/v1/admin/team/invites', b),
     revokeInvite: (id: string) => call<void>('DELETE', `/v1/admin/team/invites/${id}`),

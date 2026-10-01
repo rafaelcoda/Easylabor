@@ -1,5 +1,6 @@
 import { createApp } from '../packages/api/src/app';
 import { authenticatorFrom, supabaseIdentity } from '../packages/api/src/auth';
+import { easy365FromEnv } from '../packages/api/src/integrations/easy365';
 import { createSql } from '../packages/api/src/db';
 import { createMockProvider } from '../packages/api/src/payments/provider';
 
@@ -32,7 +33,7 @@ function getApp(): AppHandle | null {
 
   const corsOrigins = (Netlify.env.get('CORS_ORIGINS') ?? '').split(',').map((o) => o.trim()).filter(Boolean);
 
-  cached = createApp({ sql, authenticate, identify, paymentProvider, corsOrigins, verifyPhotoUploads: true, dbConfig: true, devRoutes: Netlify.env.get('DEV_ROUTES') === 'true' });
+  cached = createApp({ sql, authenticate, identify, paymentProvider, corsOrigins, verifyPhotoUploads: true, dbConfig: true, easy365: easy365FromEnv((n) => Netlify.env.get(n)), devRoutes: Netlify.env.get('DEV_ROUTES') === 'true' });
   return cached;
 }
 
