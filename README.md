@@ -13,9 +13,12 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 | `packages/core` | Regras de negócio puras em TypeScript: preço, antecipação, máquina de estados do pedido, cancelamento e no-show, check-in por GPS, ranking, ledger em partidas dobradas, prazos. **44 testes passando.** |
 | `db/migrations` | Esquema PostgreSQL + PostGIS com as 27 tabelas da especificação, travas de integridade (horários sobrepostos, ledger balanceado, tabelas só de inserção). **15 testes SQL passando.** |
 | Banco na nuvem | Projeto **EasyLabor** no Supabase (região São Paulo, `sa-east-1`) com o esquema, o RLS e o seed aplicados. Ver seção abaixo. |
-| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **64 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
+| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **9 testes passando.** |
+| `apps/panel` | Painel web da operação (Next.js). Compila. |
+| `apps/mobile` | App em Expo (cliente e profissional). Tipos ok e empacotamento Android ok; **não testado em aparelho**. |
+| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **70 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
 | `netlify/` | Função que expõe a API na Netlify (`handler.ts` + `functions/api.mts`). Site `easylabor-api` ligado ao GitHub. |
-| App (Expo), painel web | Ainda não iniciados (sprints 4 e 5 abaixo). |
+
 
 ## Banco na nuvem: Supabase (projeto EasyLabor)
 
@@ -39,6 +42,31 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 (horários sobrepostos, ledger desbalanceado e histórico imutável rejeitados) com a transação revertida, sem deixar dados.
 
 As faixas de preço das categorias no seed são **placeholders**: substituir pelos valores da cidade piloto.
+
+## Painel web da operação (`apps/panel`)
+
+Next.js (exportação estática) que fala direto com a API e com o Supabase Auth. Telas: **Painel ao vivo** (indicadores do dia e
+pedidos), **Agenda** (profissionais x pedidos por hora, mais as ofertas aguardando aceite), **Pedidos** (filtros por dia e
+estado) e **Verificação** (aprovar ou reprovar profissionais). Só entra quem tem conta de **admin**.
+
+- Rodar: `cd apps/panel && npm install && npm run dev` (abre em `http://localhost:3001`).
+- Os endereços públicos (API, Supabase e chave pública) estão em `apps/panel/src/lib/config.ts`. Nenhum segredo.
+- **Publicação:** site Netlify `easylabor-painel` (`https://easylabor-painel.netlify.app`). Ligue o repositório e use
+  *Base directory* `apps/panel` (o `apps/panel/netlify.toml` já define build `npm run build` e publish `out`).
+- A API só aceita chamadas do navegador vindas das origens da variável `CORS_ORIGINS` (já definida para o painel).
+
+## App móvel (`apps/mobile`)
+
+Expo SDK 57 (React Native) com Expo Router. **Cliente:** login por telefone, cadastro, endereços (com GPS), busca de
+profissionais, solicitação, lista e detalhe dos pedidos (cancelar, aprovar). **Profissional:** cadastro em três blocos (perfil,
+serviço e valor, agenda), botão "disponível", pedidos recebidos (aceitar, recusar, a caminho, check-in com GPS). A sessão fica
+no armazenamento seguro do aparelho.
+
+- Rodar: `cd apps/mobile && npm install && npx expo start` e abrir no app **Expo Go** (celular na mesma rede).
+- Conferir o empacotamento: `npm run bundle-check` (gera o pacote Android sem precisar de aparelho).
+- **Ainda não existe:** envio de fotos no check-out (precisa de armazenamento de arquivos), pagamento, chat, avaliações e
+  notificações push. As telas avisam isso ao usuário.
+- Publicar nas lojas exige conta de desenvolvedor (Apple e Google) e o serviço de build da Expo (EAS); fica para depois.
 
 ## API (`packages/api`)
 

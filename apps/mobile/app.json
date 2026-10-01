@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "EasyLabor",
+    "slug": "easylabor",
+    "scheme": "easylabor",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": false, "bundleIdentifier": "br.com.easylabor.app" },
+    "android": { "package": "br.com.easylabor.app" },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-location", { "locationWhenInUsePermission": "O EasyLabor usa sua localização para registrar o endereço e confirmar sua chegada ao serviço." }]
+    ],
+    "experiments": { "typedRoutes": false }
+  }
+}

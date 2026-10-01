@@ -27,7 +27,7 @@ describe('função da Netlify', () => {
   });
 
   it('com DATABASE_URL, serve a API (categorias públicas e 401 nas rotas protegidas)', async () => {
-    env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? `postgres://root:root@localhost/${TEST_DB}`;
+    env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? `postgres://${process.env.TEST_PG_USER ?? 'root'}:root@localhost/${TEST_DB}`;
     const cats = await get('/v1/categories');
     expect(cats.status).toBe(200);
     expect((await cats.json()).items.length).toBeGreaterThanOrEqual(3);
@@ -36,13 +36,13 @@ describe('função da Netlify', () => {
   });
 
   it('diagnóstico do /health?db=1 não vaza segredos e mostra o tipo de problema', async () => {
-    const good = process.env.TEST_DATABASE_URL ?? `postgres://root:root@localhost/${TEST_DB}`;
+    const good = process.env.TEST_DATABASE_URL ?? `postgres://${process.env.TEST_PG_USER ?? 'root'}:root@localhost/${TEST_DB}`;
     env.DATABASE_URL = good;
     let body = await (await get('/health?db=1')).json();
     expect(body).toMatchObject({ configured: true, url_valid: true, db: 'ok', host_kind: 'other', password_present: true });
     expect(JSON.stringify(body)).not.toContain('root:root');
 
-    env.DATABASE_URL = 'postgres://root:senhaerrada@localhost/' + TEST_DB;
+    env.DATABASE_URL = `postgres://${process.env.TEST_PG_USER ?? 'root'}:senhaerrada@localhost/` + TEST_DB;
     body = await (await get('/health?db=1')).json();
     expect(body).toMatchObject({ db: 'error', error_code: '28P01' });
     expect(body.hint).toMatch(/Senha recusada/);

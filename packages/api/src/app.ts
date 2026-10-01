@@ -1,5 +1,6 @@
 import { DEFAULT_CONFIG, quote as makeQuote, type BookingAction } from '@diaria/core';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { ApiError, conflict, forbidden, notFound } from './errors';
 import {
@@ -8,6 +9,7 @@ import {
 } from './services/accounts';
 import { createMockProvider } from './payments/provider';
 import { applyAction, createBooking, getBooking, listBookings, redirectOffer } from './services/bookings';
+import { adminBookings, adminOverview, adminSchedule } from './services/admin';
 import { handlePaymentEvent } from './services/payments';
 import { searchProfessionals } from './services/search';
 import type { AuthUser, Ctx, Deps, Identity, Role } from './types';
@@ -153,6 +155,17 @@ export function createApp(deps: Deps) {
   });
 
   // ---- autenticadas
+  // CORS: só as origens autorizadas (o painel web). O app em Expo não usa navegador e não precisa.
+  const allowed = deps.corsOrigins ?? [];
+  if (allowed.length > 0) {
+    app.use('/v1/*', cors({
+      origin: (origin) => (allowed.includes(origin) ? origin : null),
+      allowHeaders: ['authorization', 'content-type', 'idempotency-key', 'x-app-version'],
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      maxAge: 600,
+    }));
+  }
+
   // Rotas que aceitam quem tem login válido mas ainda não completou o cadastro.
   const IDENTITY_ONLY = new Set(['/v1/me', '/v1/me/register']);
 
@@ -231,6 +244,21 @@ export function createApp(deps: Deps) {
   app.get('/v1/admin/kyc/queue', async (c) => {
     needRole(c, 'admin');
     return c.json({ items: await kycQueue(ctx) });
+  });
+  const dayQuery = (v: string | undefined, fallback: Date) => (v ? parse(date, v) : new Date(fallback.getTime() - 3 * 3_600_000).toISOString().slice(0, 10));
+  app.get('/v1/admin/overview', async (c) => {
+    needRole(c, 'admin');
+    return c.json(await adminOverview(ctx, dayQuery(c.req.query('date'), ctx.now())));
+  });
+  app.get('/v1/admin/bookings', async (c) => {
+    needRole(c, 'admin');
+    const day = c.req.query('date');
+    const limit = Math.min(Number(c.req.query('limit') ?? 50) || 50, 200);
+    return c.json({ items: await adminBookings(ctx, { date: day ? parse(date, day) : undefined, status: c.req.query('status') || undefined, limit }) });
+  });
+  app.get('/v1/admin/schedule', async (c) => {
+    needRole(c, 'admin');
+    return c.json(await adminSchedule(ctx, dayQuery(c.req.query('date'), ctx.now())));
   });
   app.post('/v1/admin/kyc/:userId/decision', async (c) => {
     const admin = needRole(c, 'admin');

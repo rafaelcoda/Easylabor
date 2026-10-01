@@ -1,0 +1,42 @@
+:root { --ink:#0f2342; --muted:#4b5d7a; --line:#d5e2f7; --bg:#f3f8ff; --pri:#1a5fd0; --ok-bg:#e3f4ec; --ok:#0b6b4d; --wait-bg:#fff1d6; --wait:#7a4a00; --bad-bg:#fde7e0; --bad:#b23a17; --done-bg:#e8eef8; --done:#2c3e5f; }
+* { box-sizing: border-box; }
+body { margin:0; font-family:'Outfit',system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+a { color:var(--pri); }
+.shell { display:flex; min-height:100vh; }
+.side { width:232px; background:var(--ink); padding:24px 16px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
+.side .brand { color:#fff; font-weight:800; font-size:26px; padding:0 16px 4px; }
+.side .sub { color:#c4d3ec; font-size:13px; padding:0 16px 20px; }
+.side a { color:#c4d3ec; text-decoration:none; padding:11px 16px; border-radius:10px; font-weight:500; }
+.side a.on { background:rgba(255,255,255,.14); color:#fff; font-weight:600; }
+.side button { margin-top:auto; background:transparent; border:1px solid rgba(255,255,255,.25); color:#c4d3ec; border-radius:10px; padding:10px; cursor:pointer; font:inherit; }
+.main { flex:1; padding:32px; min-width:0; }
+h1 { margin:0; font-size:30px; }
+.sub-h { color:var(--muted); font-size:14px; margin:2px 0 20px; text-transform:capitalize; }
+.card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:20px; box-shadow:0 6px 18px rgba(15,35,66,.08); }
+.kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:16px; margin-bottom:20px; }
+.kpi .l { color:var(--muted); font-size:13px; } .kpi .v { font-size:32px; font-weight:700; margin-top:2px; }
+.kpi.bad .v { color:var(--bad); }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th { text-align:left; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; padding:8px 10px; }
+td { padding:12px 10px; border-top:1px solid var(--line); }
+.badge { display:inline-block; padding:3px 10px; border-radius:13px; font-size:13px; font-weight:600; white-space:nowrap; }
+.badge.ok { background:var(--ok-bg); color:var(--ok); } .badge.wait { background:var(--wait-bg); color:var(--wait); }
+.badge.bad { background:var(--bad-bg); color:var(--bad); } .badge.done { background:var(--done-bg); color:var(--done); }
+.row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.btn { background:var(--pri); color:#fff; border:0; border-radius:10px; padding:10px 16px; font:inherit; font-weight:600; cursor:pointer; }
+.btn.sec { background:#fff; color:var(--pri); border:1.5px solid var(--pri); } .btn.bad { background:#fff; color:var(--bad); border:1.5px solid var(--bad); }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+input, select { font:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink); }
+.err { color:var(--bad); font-weight:600; } .muted { color:var(--muted); }
+.login { max-width:420px; margin:12vh auto; }
+.login label { display:block; font-size:13px; font-weight:600; color:var(--muted); margin:14px 0 6px; } .login input { width:100%; }
+.gantt { position:relative; }
+.gantt .head, .gantt .line { display:flex; align-items:center; }
+.gantt .name { width:170px; flex-shrink:0; font-weight:600; font-size:14px; padding-right:8px; }
+.gantt .track { position:relative; flex:1; height:42px; border-left:1px solid var(--line); background:repeating-linear-gradient(to right, transparent 0, transparent calc(100%/14 - 1px), var(--line) calc(100%/14 - 1px), var(--line) calc(100%/14)); }
+.gantt .line { border-top:1px solid var(--line); }
+.gantt .hour { flex:1; font-size:12px; color:var(--muted); }
+.bar { position:absolute; top:6px; height:30px; border-radius:8px; padding:0 8px; font-size:12px; font-weight:600; display:flex; align-items:center; overflow:hidden; white-space:nowrap; border:1.5px solid; }
+.bar.ok { background:var(--pri); color:#fff; border-color:var(--pri); } .bar.done { background:#e3ecfa; color:var(--ink); border-color:#c5d4ec; }
+.bar.wait { background:#fff; color:var(--ink); border:1.5px dashed var(--muted); } .bar.bad { background:var(--bad-bg); color:var(--bad); border-color:var(--bad); }
+.now { position:absolute; top:0; bottom:0; width:0; border-left:2px dashed var(--pri); pointer-events:none; }

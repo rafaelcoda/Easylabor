@@ -29,6 +29,8 @@ export interface Deps {
   config?: Config;
   /** Provedor de pagamentos. Sem ele, usa o simulado (que não movimenta dinheiro). */
   paymentProvider?: PaymentProvider;
+  /** Origens de navegador autorizadas a chamar a API (painel web). Vazio = nenhuma. */
+  corsOrigins?: string[];
   /** Rotas de desenvolvimento (simulam webhooks do provedor de pagamentos). Nunca em produção. */
   devRoutes?: boolean;
 }

@@ -30,7 +30,9 @@ function getApp(): AppHandle | null {
   // Provedor de pagamentos: por enquanto o simulado. O webhook só funciona com MOCK_WEBHOOK_SECRET definido.
   const paymentProvider = createMockProvider({ webhookSecret: Netlify.env.get('MOCK_WEBHOOK_SECRET') });
 
-  cached = createApp({ sql, authenticate, identify, paymentProvider, devRoutes: Netlify.env.get('DEV_ROUTES') === 'true' });
+  const corsOrigins = (Netlify.env.get('CORS_ORIGINS') ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+
+  cached = createApp({ sql, authenticate, identify, paymentProvider, corsOrigins, devRoutes: Netlify.env.get('DEV_ROUTES') === 'true' });
   return cached;
 }
 

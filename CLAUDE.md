@@ -7,12 +7,21 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 - `packages/core`: regras de negócio puras em TypeScript (preço, estados do pedido, cancelamento, check-in, ranking, ledger, prazos). Sem I/O.
 - `packages/api`: API em Hono + `postgres` + `zod`, sobre o núcleo.
 - `netlify/handler.ts` + `netlify/functions/api.mts`: a API como função da Netlify. O build gera `netlify/functions/_generated/handler.mjs` com esbuild (não versionar).
+- `packages/client`: cliente tipado da API, usado pelo app e pelo painel (importado por caminho relativo).
+- `apps/panel`: painel web da operação (Next.js, exportação estática). `apps/mobile`: app em Expo. Ficam FORA dos workspaces do npm de propósito (cada um tem seu `package.json` e `package-lock.json`), para o build da API no Netlify não instalar Expo nem Next.
 - `db/`: migrações SQL (PostgreSQL + PostGIS), seed e testes SQL.
 
 ## Comandos
-- `npm install`, `npm test` (núcleo + API), `npm run typecheck`, `npm run build:functions`.
+- **Primeira vez em um ambiente novo (nuvem ou máquina nova):** `bash scripts/setup-testdb.sh` instala e liga o PostgreSQL com PostGIS e cria o papel de teste; siga as linhas `export` que ele imprimir.
+- `npm install`, `npm test` (núcleo, API e cliente), `npm run typecheck`, `npm run build:functions`.
 - Testes da API criam o banco `diaria_api_test` e exigem PostgreSQL local com PostGIS (`TEST_PG_HOST`, `TEST_PG_USER`, `TEST_DATABASE_URL` ajustam a conexão).
 - Testes SQL: `DATABASE_URL=postgres://... npm run db:test` (banco vazio).
+
+## Como trabalhar aqui (fluxo com o Claude Code)
+1. Rode `bash scripts/setup-testdb.sh` (uma vez por ambiente) e `npm install`.
+2. Faça a mudança com testes. Antes de commitar rode `npm test` e `npm run typecheck`; nos apps rode também `npx tsc --noEmit` dentro de `apps/panel` e `apps/mobile`.
+3. Commit pequeno e claro, em português, e `push` na `main`: o Netlify publica a API sozinho. Mudança de banco = nova migração em `db/migrations/` e avisar para aplicá-la no Supabase.
+4. Nunca colocar senha, token ou chave secreta no código. Os endereços e a chave **pública** do Supabase em `apps/*/lib/config.ts` não são segredo.
 
 ## Regras do projeto
 - Dinheiro sempre em centavos inteiros; taxas em pontos-base. Nunca ponto flutuante.
@@ -41,5 +50,5 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 1. Confirmar que `/v1/categories` responde em produção (conexão com o banco).
 2. Login por telefone: a API já cadastra e controla acesso por perfil (testado com identidade simulada). Falta habilitar o login por telefone no Supabase (números de teste, depois provedor de SMS) e testar de ponta a ponta com `scripts/login-teste.mjs`. Envio de documentos do KYC ainda não existe.
 3. Pagamentos reais: ADIADO por decisão do projeto. Pronto: interface `PaymentProvider` + simulado, webhook idempotente, repasses (desligados), rotinas agendadas (aceite vencido com reenvio, ausência, aprovação automática, estornos). Falta escolher o provedor e escrever o adaptador; hoje o Pix gerado é simulado e nenhum pedido sai de "aguardando pagamento" em produção.
-4. Sprint 4: app em Expo (React Native). Sprint 5: painel web em Next.js (vai precisar de CORS na API).
+4. App (`apps/mobile`) e painel (`apps/panel`) existem em versão inicial. Falta: upload de fotos (Supabase Storage) para o check-out, notificações push, avaliações, chat, disputas no painel, publicar o painel no Netlify (site `easylabor-painel`, base `apps/panel`) e gerar o app nas lojas (EAS).
 5. `Idempotency-Key`, reenvio automático após recusa, disputa, avaliações, chat e upload de arquivos.
