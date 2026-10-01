@@ -33,6 +33,10 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 - Não colar credenciais em conversas. Se vazar, redefinir na hora.
 - Jurídico: o risco de vínculo trabalhista precisa de parecer antes do lançamento; não mudar regras de preço ou penalidade sem revisar isso.
 
+## Antes de abrir ao público
+- Apagar `public/teste-interno.html` (página de teste) e os números de teste com código fixo do Supabase Auth.
+- Proteger ou remover o diagnóstico `GET /health?db=1`.
+
 ## Pendências principais
 1. Confirmar que `/v1/categories` responde em produção (conexão com o banco).
 2. Login por telefone: a API já cadastra e controla acesso por perfil (testado com identidade simulada). Falta habilitar o login por telefone no Supabase (números de teste, depois provedor de SMS) e testar de ponta a ponta com `scripts/login-teste.mjs`. Envio de documentos do KYC ainda não existe.

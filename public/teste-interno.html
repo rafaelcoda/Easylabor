@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>EasyLabor · teste interno</title>
+<style>
+  :root { --ink:#0f2342; --muted:#4b5d7a; --line:#d5e2f7; --bg:#f3f8ff; --pri:#1a5fd0; --ok:#0b6b4d; --bad:#b23a17; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width: 860px; margin: 0 auto; display:grid; gap:20px; }
+  h1 { margin:0; font-size:24px; }
+  h2 { margin:0 0 8px; font-size:18px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .warn { background:#fff1d6; border-color:#f0d9a4; color:#7a4a00; font-size:14px; }
+  label { display:block; font-size:13px; font-weight:600; color:var(--muted); margin:10px 0 4px; }
+  input, select, textarea { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font:inherit; background:#fff; color:var(--ink); }
+  textarea { font-family: ui-monospace,Menlo,Consolas,monospace; font-size:13px; min-height:130px; }
+  button { padding:10px 16px; border:0; border-radius:10px; background:var(--pri); color:#fff; font:inherit; font-weight:600; cursor:pointer; }
+  button.sec { background:#fff; color:var(--pri); border:1.5px solid var(--pri); }
+  button.chip { background:#fff; color:var(--ink); border:1px solid var(--line); font-weight:500; padding:7px 12px; font-size:14px; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:end; }
+  .row > div { flex:1; min-width:180px; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 4px; }
+  .group { font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:12px 0 2px; }
+  pre { margin:0; padding:14px; background:#0f2342; color:#e6efff; border-radius:10px; overflow:auto; font-size:13px; max-height:420px; white-space:pre-wrap; word-break:break-word; }
+  .status { font-size:14px; font-weight:600; }
+  .status.ok { color:var(--ok); } .status.bad { color:var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>EasyLabor · teste interno</h1>
+    <p style="margin:4px 0 0;color:var(--muted)">Faça login com um número de teste e chame a API clicando nos botões. Nada é instalado no seu computador.</p>
+  </div>
+
+  <div class="card warn">
+    Página temporária para desenvolvimento. <strong>Apague o arquivo <code>public/teste-interno.html</code> e os números de teste do Supabase antes de abrir o produto ao público.</strong>
+    Não cole o token em conversas.
+  </div>
+
+  <section class="card">
+    <h2>1. Login por telefone</h2>
+    <div class="row">
+      <div><label for="phone">Telefone (com +55)</label><input id="phone" value="+5527999990001" autocomplete="off"></div>
+      <div style="flex:0"><button id="send">Enviar código</button></div>
+    </div>
+    <div class="row">
+      <div><label for="otp">Código (o do número de teste, por exemplo 123456)</label><input id="otp" value="123456" autocomplete="off"></div>
+      <div style="flex:0"><button id="verify">Entrar</button></div>
+    </div>
+    <p id="loginStatus" class="status" style="margin:12px 0 0">Não logado.</p>
+    <div class="row" style="margin-top:8px"><button id="logout" class="sec" type="button">Sair</button></div>
+  </section>
+
+  <section class="card">
+    <h2>2. Chamar a API</h2>
+    <div class="group">Conta</div>
+    <div class="chips">
+      <button class="chip" data-p="me">Meu perfil</button>
+      <button class="chip" data-p="regCliente">Cadastrar como cliente</button>
+      <button class="chip" data-p="regPro">Cadastrar como profissional</button>
+    </div>
+    <div class="group">Cliente</div>
+    <div class="chips">
+      <button class="chip" data-p="addr">Novo endereço</button>
+      <button class="chip" data-p="addrs">Meus endereços</button>
+      <button class="chip" data-p="busca">Buscar pintores (amanhã)</button>
+      <button class="chip" data-p="pedido">Criar pedido</button>
+      <button class="chip" data-p="pedidos">Meus pedidos</button>
+    </div>
+    <div class="group">Profissional</div>
+    <div class="chips">
+      <button class="chip" data-p="perfil">Completar perfil</button>
+      <button class="chip" data-p="oferta">Oferecer Pintor (R$ 200)</button>
+      <button class="chip" data-p="agenda">Agenda de amanhã</button>
+      <button class="chip" data-p="visivel">Ficar disponível</button>
+      <button class="chip" data-p="aceitar">Aceitar pedido</button>
+    </div>
+    <div class="group">Operação (conta admin)</div>
+    <div class="chips">
+      <button class="chip" data-p="fila">Fila de verificação</button>
+      <button class="chip" data-p="aprovar">Aprovar profissional</button>
+    </div>
+    <div class="group">Público</div>
+    <div class="chips"><button class="chip" data-p="cats">Categorias</button><button class="chip" data-p="health">Saúde do banco</button></div>
+
+    <div class="row" style="margin-top:12px">
+      <div style="flex:0 0 130px"><label for="method">Método</label>
+        <select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select></div>
+      <div style="flex:3"><label for="path">Caminho</label><input id="path" value="/v1/me" autocomplete="off"></div>
+    </div>
+    <label for="body">Corpo (JSON, só em POST e PUT)</label>
+    <textarea id="body" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:10px"><button id="call">Enviar</button></div>
+  </section>
+
+  <section class="card">
+    <h2>Resposta</h2>
+    <p id="callStatus" class="status" style="margin:0 0 8px">Nenhuma chamada ainda.</p>
+    <pre id="out">—</pre>
+  </section>
+</main>
+
+<script>
+// A URL e a chave pública do Supabase são públicas por desenho (a chave "publishable" pode ficar no navegador).
+const SUPABASE_URL = 'https://hbyzutbpkzaiuutgiaqs.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_k4sDbuakhrxCfW7Lg2ROYA_QtcpX55Q';
+const $ = (id) => document.getElementById(id);
+let token = sessionStorage.getItem('el_token') || '';
+
+const tomorrow = () => { const d = new Date(Date.now() + 86400000); return d.toISOString().slice(0, 10); };
+const J = (o) => JSON.stringify(o, null, 2);
+
+const PRESETS = {
+  me:        () => ['GET', '/v1/me', ''],
+  regCliente:() => ['POST', '/v1/me/register', J({ role: 'client', full_name: 'Cliente Teste', accepted_terms_version: 'v1' })],
+  regPro:    () => ['POST', '/v1/me/register', J({ role: 'professional', full_name: 'Profissional Teste', accepted_terms_version: 'v1' })],
+  addr:      () => ['POST', '/v1/client/addresses', J({ street: 'Rua das Flores', number: '120', district: 'Jardim Camburi', city: 'Vitória', state: 'ES', lat: -20.2731, lng: -40.2785 })],
+  addrs:     () => ['GET', '/v1/client/addresses', ''],
+  busca:     () => ['GET', `/v1/search/professionals?category=pintor&date=${tomorrow()}&lat=-20.2731&lng=-40.2785`, ''],
+  pedido:    () => ['POST', '/v1/bookings', J({ professional_id: 'COLE-O-ID-DO-PROFISSIONAL', category: 'pintor', address_id: 'COLE-O-ID-DO-ENDERECO', date: tomorrow(), start_time: '08:00', duration_minutes: 480, description: 'Pintar sala e corredor, 45 m².' })],
+  pedidos:   () => ['GET', '/v1/bookings', ''],
+  perfil:    () => ['PUT', '/v1/professional/profile', J({ bio: 'Pintor há 12 anos', lat: -20.275, lng: -40.28, radius_km: 10, pix_key: '12345678901' })],
+  oferta:    () => ['PUT', '/v1/professional/offers/pintor', J({ daily_rate_cents: 20000 })],
+  agenda:    () => ['PUT', `/v1/professional/availability/${tomorrow()}`, J({ start_time: '06:00', end_time: '20:00' })],
+  visivel:   () => ['PUT', '/v1/professional/status', J({ visible: true })],
+  aceitar:   () => ['POST', '/v1/bookings/COLE-O-ID-DO-PEDIDO/accept', ''],
+  fila:      () => ['GET', '/v1/admin/kyc/queue', ''],
+  aprovar:   () => ['POST', '/v1/admin/kyc/COLE-O-ID-DO-PROFISSIONAL/decision', J({ decision: 'approve' })],
+  cats:      () => ['GET', '/v1/categories', ''],
+  health:    () => ['GET', '/health?db=1', ''],
+};
+
+function setLogin() {
+  const el = $('loginStatus');
+  if (token) { el.textContent = 'Logado (token válido por cerca de 1 hora).'; el.className = 'status ok'; }
+  else { el.textContent = 'Não logado.'; el.className = 'status'; }
+}
+setLogin();
+
+async function auth(path, payload) {
+  const res = await fetch(SUPABASE_URL + path, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  return { ok: res.ok, status: res.status, data };
+}
+
+$('send').onclick = async () => {
+  const phone = $('phone').value.trim();
+  const r = await auth('/auth/v1/otp', { phone });
+  const el = $('loginStatus');
+  if (r.ok) { el.textContent = 'Código solicitado. Digite o código do número de teste e clique em Entrar.'; el.className = 'status ok'; }
+  else { el.textContent = 'Falha ao pedir o código: ' + (r.data.msg || r.data.error_description || r.data.message || r.status); el.className = 'status bad'; }
+};
+
+$('verify').onclick = async () => {
+  const r = await auth('/auth/v1/verify', { phone: $('phone').value.trim(), token: $('otp').value.trim(), type: 'sms' });
+  const el = $('loginStatus');
+  if (r.ok && r.data.access_token) {
+    token = r.data.access_token; sessionStorage.setItem('el_token', token); setLogin();
+  } else {
+    el.textContent = 'Falha ao entrar: ' + (r.data.msg || r.data.error_description || r.data.message || r.status); el.className = 'status bad';
+  }
+};
+
+$('logout').onclick = () => { token = ''; sessionStorage.removeItem('el_token'); setLogin(); };
+
+document.querySelectorAll('button[data-p]').forEach((b) => {
+  b.onclick = () => {
+    const [m, p, body] = PRESETS[b.dataset.p]();
+    $('method').value = m; $('path').value = p; $('body').value = body;
+  };
+});
+
+$('call').onclick = async () => {
+  const method = $('method').value;
+  const path = $('path').value.trim();
+  const headers = { 'content-type': 'application/json' };
+  if (token) headers.authorization = 'Bearer ' + token;
+  const init = { method, headers };
+  const body = $('body').value.trim();
+  if (body && (method === 'POST' || method === 'PUT')) init.body = body;
+  $('callStatus').textContent = 'Enviando…'; $('callStatus').className = 'status';
+  try {
+    const res = await fetch(path, init);
+    const text = await res.text();
+    let shown = text;
+    try { shown = J(JSON.parse(text)); } catch { /* resposta vazia ou não JSON */ }
+    $('callStatus').textContent = `${method} ${path} → ${res.status}`;
+    $('callStatus').className = 'status ' + (res.ok ? 'ok' : 'bad');
+    $('out').textContent = shown || '(sem corpo)';
+  } catch (e) {
+    $('callStatus').textContent = 'Erro de rede: ' + e.message; $('callStatus').className = 'status bad';
+  }
+};
+</script>
+</body>
+</html>

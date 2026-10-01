@@ -75,7 +75,11 @@ cadastro; as demais rotas exigem usuário cadastrado e ativo, e cada rota confer
 `users.id` é o mesmo id do Supabase Auth. Admin não se cadastra pela API: promova a conta por SQL
 (`UPDATE users SET role = 'admin' WHERE phone = '+55...'`).
 
-**Testar o login sem SMS e sem app:** habilite o login por telefone no Supabase (*Authentication > Sign In / Providers > Phone*)
+**Página de teste no navegador (sem instalar nada):** `https://easylabor-api.netlify.app/teste-interno.html` faz o login com um
+número de teste e chama a API por botões (cadastro, endereço, perfil, busca, pedido). É temporária: **apague
+`public/teste-interno.html` e os números de teste do Supabase antes de abrir o produto ao público.**
+
+**Testar o login sem SMS e sem app (alternativa por terminal):** habilite o login por telefone no Supabase (*Authentication > Sign In / Providers > Phone*)
 e cadastre um número de teste com código fixo (*Test Phone Numbers and OTPs*, formato `5527999990001=123456`). Depois:
 `SUPABASE_URL=... SUPABASE_ANON_KEY=... node scripts/login-teste.mjs +5527999990001 123456` imprime o token, e
 `curl https://easylabor-api.netlify.app/v1/me -H "Authorization: Bearer <token>"` consulta o perfil.
