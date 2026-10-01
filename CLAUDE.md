@@ -32,6 +32,7 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 - Toda mudança de código vem com teste. Rode `npm test` e `npm run typecheck` antes de commitar.
 
 ## Infraestrutura
+- Migrações aplicadas no Supabase: 0001 a 0005 (a 0005 é a disponibilidade semanal).
 - Banco: Supabase, projeto **EasyLabor** (`hbyzutbpkzaiuutgiaqs`, região São Paulo). RLS ligado em todas as tabelas, sem políticas: só o servidor acessa, com credencial de servidor.
 - API: Netlify, site `easylabor-api` (`https://easylabor-api.netlify.app`). Publica sozinho a cada commit na `main`.
 - Variáveis no Netlify: `DATABASE_URL` (secreta, string do Transaction pooler, porta 6543, usuário `postgres.<projeto>`), `SUPABASE_URL`, `SUPABASE_ANON_KEY`.

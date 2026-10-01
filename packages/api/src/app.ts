@@ -4,7 +4,7 @@ import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { ApiError, conflict, forbidden, notFound } from './errors';
 import {
-  createAddress, deleteAccount, deleteAddress, getMe, kycDecision, kycQueue, listAddresses, register, setAvailability, setVisibility,
+  createAddress, deleteAccount, deleteAddress, getMe, getProfessionalSetup, removeOffer, setWeekly, kycDecision, kycQueue, listAddresses, register, setAvailability, setVisibility,
   upsertOffer, upsertProfessionalProfile,
 } from './services/accounts';
 import { createMockProvider } from './payments/provider';
@@ -116,6 +116,7 @@ const professionalProfileBody = z.object({
 });
 const offerBody = z.object({ daily_rate_cents: z.number().int().positive(), description: z.string().max(300).optional() });
 const availabilityBody = z.object({ start_time: time, end_time: time });
+const weeklyBody = z.object({ days: z.array(z.number().int().min(1).max(7)).max(7), start_time: time, end_time: time });
 const visibilityBody = z.object({ visible: z.boolean() });
 const kycBody = z.object({ decision: z.enum(['approve', 'reject']), reason: z.string().max(300).optional() });
 
@@ -230,6 +231,16 @@ export function createApp(deps: Deps) {
     const user = needRole(c, 'professional');
     const b = parse(offerBody, await jsonBody(c.req.raw));
     return c.json(await upsertOffer(ctx, user.id, c.req.param('category'), b.daily_rate_cents, b.description));
+  });
+  app.get('/v1/professional/setup', async (c) => c.json(await getProfessionalSetup(ctx, needRole(c, 'professional').id)));
+  app.put('/v1/professional/availability/weekly', async (c) => {
+    const user = needRole(c, 'professional');
+    const b = parse(weeklyBody, await jsonBody(c.req.raw));
+    return c.json(await setWeekly(ctx, user.id, b.days, b.start_time, b.end_time));
+  });
+  app.delete('/v1/professional/offers/:category', async (c) => {
+    await removeOffer(ctx, needRole(c, 'professional').id, c.req.param('category'));
+    return c.body(null, 204);
   });
   app.put('/v1/professional/availability/:day', async (c) => {
     const user = needRole(c, 'professional');

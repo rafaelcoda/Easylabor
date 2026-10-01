@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, categoryName, createClient, eventLabel, PAYMENT_STATUS_LABEL, errorMessage, formatBRL, photoPath } from '../src';
+import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, categoryName, createClient, eventLabel, PAYMENT_STATUS_LABEL, WEEKDAYS, errorMessage, formatBRL, photoPath } from '../src';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const make = (impl: (url: string, init: RequestInit) => Response | Promise<Response>, token: string | null = 'tok') => {
@@ -85,5 +85,23 @@ describe('cliente da API', () => {
     expect(eventLabel('booking.check_in')).toBe('Chegada confirmada');
     expect(eventLabel('booking.created')).toBe('Pedido criado');
     expect(eventLabel('booking.algo_novo')).toBe('algo novo'); // tipo desconhecido não quebra
+  });
+
+  it('disponibilidade semanal: chama as rotas certas e usa 1 a 7 (segunda a domingo)', async () => {
+    const { f, api } = make(() => json(200, { days: [1, 3], start_time: '06:00', end_time: '20:00' }));
+    await api.saveWeekly([1, 3], '06:00', '20:00');
+    const [url, init] = f.mock.calls[0]!;
+    expect(url).toBe('https://api.test/v1/professional/availability/weekly');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body as string)).toEqual({ days: [1, 3], start_time: '06:00', end_time: '20:00' });
+    expect(WEEKDAYS.map((d) => d.iso)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(WEEKDAYS[0]!.label).toBe('Segunda-feira');
+    expect(WEEKDAYS[6]!.label).toBe('Domingo');
+    const setup = make(() => json(200, { profile: null, offers: [], weekly: { days: [], start_time: '06:00', end_time: '20:00' } }));
+    expect((await setup.api.professionalSetup()).offers).toEqual([]);
+    expect(setup.f.mock.calls[0]![0]).toBe('https://api.test/v1/professional/setup');
+    const del = make(() => new Response(null, { status: 204 }));
+    await del.api.removeOffer('pintor');
+    expect(del.f.mock.calls[0]![1].method).toBe('DELETE');
   });
 });

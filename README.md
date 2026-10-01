@@ -13,10 +13,10 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 | `packages/core` | Regras de negócio puras em TypeScript: preço, antecipação, máquina de estados do pedido, cancelamento e no-show, check-in por GPS, ranking, ledger em partidas dobradas, prazos. **44 testes passando.** |
 | `db/migrations` | Esquema PostgreSQL + PostGIS com as 27 tabelas da especificação, travas de integridade (horários sobrepostos, ledger balanceado, tabelas só de inserção). **15 testes SQL passando.** |
 | Banco na nuvem | Projeto **EasyLabor** no Supabase (região São Paulo, `sa-east-1`) com o esquema, o RLS e o seed aplicados. Ver seção abaixo. |
-| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **10 testes passando.** |
+| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **12 testes passando.** |
 | `apps/panel` | Painel web da operação (Next.js). Compila. |
 | `apps/mobile` | App em Expo (cliente e profissional). Tipos ok e empacotamento Android ok; **não testado em aparelho**. |
-| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **83 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
+| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **92 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
 | `netlify/` | Função que expõe a API na Netlify (`handler.ts` + `functions/api.mts`). Site `easylabor-api` ligado ao GitHub. |
 
 
@@ -57,8 +57,7 @@ estado) e **Verificação** (aprovar ou reprovar profissionais). Só entra quem 
 
 ## App móvel (`apps/mobile`)
 
-Expo SDK 57 (React Native) com Expo Router. **Cliente:** login por telefone, cadastro, endereços (com GPS), tela **Explorar** (busca com localização e dia, categorias em carrossel e vitrine de profissionais com selo de disponibilidade, nota, distância e valor), solicitação, lista e detalhe dos pedidos (cancelar, aprovar). **Profissional:** cadastro em três blocos (perfil,
-serviço e valor, agenda), botão "disponível", pedidos recebidos (aceitar, recusar, a caminho, check-in com GPS). A sessão fica
+Expo SDK 57 (React Native) com Expo Router. **Cliente:** login por telefone, cadastro, endereços (com GPS), tela **Explorar** (busca com localização e dia, categorias em carrossel e vitrine de profissionais com selo de disponibilidade, nota, distância e valor), solicitação, lista e detalhe dos pedidos (cancelar, aprovar). **Profissional:** cadastro em três blocos (**1. serviços e valor**, com seletor com busca e vários serviços; **2. perfil**; **3. disponibilidade da semana**, com caixas de marcação) e um único botão "Salvar cadastro", botão "disponível", pedidos recebidos (aceitar, recusar, a caminho, check-in com GPS). A sessão fica
 no armazenamento seguro do aparelho.
 
 - Rodar: `cd apps/mobile && npm install && npx expo start` e abrir no app **Expo Go** (celular na mesma rede).
@@ -82,7 +81,7 @@ Supabase (`src/edge.ts`). A API conecta direto ao PostgreSQL com credencial de s
 | `GET /health`, `GET /v1/categories` | público | Saúde e categorias |
 | `GET /v1/me`, `POST /v1/me/register` | login (mesmo sem cadastro) | Consulta o perfil; cadastra cliente ou profissional a partir do telefone verificado |
 | `GET/POST/DELETE /v1/client/addresses` | cliente | Endereços (o app informa latitude e longitude) |
-| `PUT /v1/professional/profile`, `offers/:categoria`, `availability/:dia`, `status` | profissional | Perfil e raio, serviço e valor (dentro da faixa), agenda e "disponível" |
+| `PUT /v1/professional/profile`, `offers/:categoria`, `availability/weekly`, `availability/:dia`, `status`; `GET /v1/professional/setup`; `DELETE offers/:categoria` | profissional | Perfil e raio, serviços e valores (dentro da faixa), disponibilidade da semana (dias 1 = segunda a 7 = domingo e horário), ajuste de um dia, "disponível", leitura do cadastro para preencher a tela e remoção de serviço |
 | `GET /v1/admin/kyc/queue`, `POST /v1/admin/kyc/:id/decision` | admin | Fila e decisão de verificação, com log de auditoria |
 | `GET /v1/search/professionals` | cliente | Busca por categoria, data e endereço, ordenada pelo score do PRD |
 | `POST /v1/bookings/quote` | login | Cotação (diária, taxa, comissão, líquido) |
@@ -101,6 +100,11 @@ Erros seguem o formato `{ error: { code, message, details, request_id } }` da es
 **Ainda não feito na API:** `Idempotency-Key`, reenvio automático ao próximo profissional após recusa ou prazo vencido
 (depende dos jobs da sprint 3), disputa, avaliações, chat, upload de arquivos, cadastro e KYC do profissional,
 antecipação, rotas de admin e webhooks reais do provedor.
+
+**Disponibilidade da semana:** o profissional marca os dias (um, vários ou todos; 1 = segunda ... 7 = domingo) e o horário. A API
+cria as linhas de `availabilities` dos próximos 28 dias (`source = 'weekly'`) e a rotina de 5 em 5 minutos mantém essa janela
+sempre cheia. Ajuste de um dia específico (`source = 'manual'`) e dias reservados nunca são sobrescritos. A busca continua
+olhando só para `availabilities`. Migração `db/migrations/0005_weekly_availability.sql` (já aplicada no Supabase).
 
 **Rotinas automáticas (função agendada `jobs`, a cada 5 minutos):** expiram o Pix não pago; passam a oferta ao próximo
 profissional quando o aceite vence ou há recusa (até 3 tentativas, mantendo o valor pago e só para quem cobra igual ou menos);

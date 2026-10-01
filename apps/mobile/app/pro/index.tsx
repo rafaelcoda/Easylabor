@@ -12,6 +12,7 @@ const NEXT: Record<string, string> = {
   complete_profile: 'Complete seu cadastro para começar a receber pedidos.',
   await_kyc: 'Cadastro enviado. A operação está verificando seus dados; você será liberado em breve.',
   add_offer: 'Cadastro aprovado. Falta escolher o serviço e o valor da sua diária.',
+  add_availability: 'Cadastro aprovado. Falta marcar os dias da semana em que você atende.',
 };
 
 export default function ProInicio() {

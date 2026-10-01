@@ -2,6 +2,9 @@ import { inTransaction, type Sql } from '../db';
 import { ApiError, conflict, forbidden, notFound, unprocessable } from '../errors';
 import type { AuthUser, Ctx, Identity } from '../types';
 
+/** Hoje, no fuso de São Paulo (UTC-3), como AAAA-MM-DD. */
+export const spToday = (ctx: Ctx) => new Date(ctx.now().getTime() - 3 * 3_600_000).toISOString().slice(0, 10);
+
 /** Telefone em E.164: o Supabase devolve só dígitos, sem o "+". */
 export function normalizePhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -59,8 +62,10 @@ export async function getMe(ctx: Ctx, user: AuthUser) {
     const p = (await ctx.sql`
       SELECT kyc_status, visible, radius_km, level FROM professional_profiles WHERE user_id = ${u.id}`)[0];
     const offers = (await ctx.sql`SELECT count(*)::int AS n FROM service_offers WHERE professional_id = ${u.id} AND active`)[0]!.n as number;
+    const free = (await ctx.sql`
+      SELECT count(*)::int AS n FROM availabilities WHERE professional_id = ${u.id} AND status = 'free' AND day >= ${spToday(ctx)}::date`)[0]!.n as number;
     let next = 'complete_profile';
-    if (p) next = p.kyc_status !== 'approved' ? 'await_kyc' : offers === 0 ? 'add_offer' : 'ready';
+    if (p) next = p.kyc_status !== 'approved' ? 'await_kyc' : offers === 0 ? 'add_offer' : free === 0 ? 'add_availability' : 'ready';
     return {
       ...base,
       professional: p ? { profile_complete: true, kyc_status: p.kyc_status, visible: p.visible, radius_km: p.radius_km, level: p.level, offers } : { profile_complete: false },
@@ -170,6 +175,76 @@ export async function setAvailability(ctx: Ctx, userId: string, day: string, sta
       ON CONFLICT (professional_id, day, start_time) DO UPDATE SET end_time = EXCLUDED.end_time, status = 'free'`;
   });
   return { day, start_time: startTime, end_time: endTime };
+}
+
+// ------------------------------------------------------------------ disponibilidade semanal e tela de cadastro
+const HORIZON_DAYS = 28;
+const hhmm = (t: unknown) => String(t).slice(0, 5);
+
+/**
+ * Cria as linhas de disponibilidade dos próximos 28 dias a partir do modelo semanal. Só preenche dias que ainda não
+ * têm nenhuma linha: o que o profissional ajustou à mão num dia, e dias já reservados, nunca são tocados.
+ * Devolve quantas linhas foram criadas. Sem `professionalId`, vale para todos (usado pela rotina diária).
+ */
+export async function materializeWeekly(sql: Sql, today: string, professionalId?: string): Promise<number> {
+  const rows = await sql`
+    INSERT INTO availabilities (professional_id, day, start_time, end_time, status, source)
+    SELECT p.user_id, d.day::date, p.weekly_start, p.weekly_end, 'free', 'weekly'
+    FROM professional_profiles p
+    CROSS JOIN LATERAL generate_series(${today}::date, ${today}::date + ${HORIZON_DAYS - 1}::int, interval '1 day') AS d(day)
+    WHERE cardinality(p.weekly_days) > 0 AND p.weekly_start IS NOT NULL AND p.weekly_end IS NOT NULL
+      ${professionalId ? sql`AND p.user_id = ${professionalId}` : sql``}
+      AND extract(isodow FROM d.day)::smallint = ANY(p.weekly_days)
+      AND NOT EXISTS (SELECT 1 FROM availabilities a WHERE a.professional_id = p.user_id AND a.day = d.day::date)
+    ON CONFLICT (professional_id, day, start_time) DO NOTHING
+    RETURNING 1`;
+  return rows.length;
+}
+
+/** Define os dias da semana (1 = segunda ... 7 = domingo) e o horário em que o profissional atende. Lista vazia desliga. */
+export async function setWeekly(ctx: Ctx, userId: string, days: number[], startTime: string, endTime: string) {
+  await requireProfessionalProfile(ctx.sql, userId);
+  const unique = [...new Set(days)].sort((a, b) => a - b);
+  if (unique.length > 0 && endTime <= startTime) throw unprocessable('invalid_range', 'O horário final deve ser depois do inicial');
+  const today = spToday(ctx);
+  await inTransaction(ctx.sql, async (tx) => {
+    await tx`
+      UPDATE professional_profiles
+      SET weekly_days = ${unique}::smallint[], weekly_start = ${unique.length ? startTime : null}::time, weekly_end = ${unique.length ? endTime : null}::time
+      WHERE user_id = ${userId}`;
+    // Refaz só o que veio do modelo semanal e ainda está livre, daqui para a frente.
+    await tx`DELETE FROM availabilities WHERE professional_id = ${userId} AND source = 'weekly' AND status = 'free' AND day >= ${today}::date`;
+    await materializeWeekly(tx as unknown as Sql, today, userId);
+  });
+  return { days: unique, start_time: startTime, end_time: endTime };
+}
+
+/** Tudo o que a tela "Seu cadastro" precisa para abrir já preenchida. */
+export async function getProfessionalSetup(ctx: Ctx, userId: string) {
+  const p = (await ctx.sql`
+    SELECT bio, radius_km, pix_key, ST_Y(base_location::geometry) AS lat, ST_X(base_location::geometry) AS lng,
+           weekly_days, weekly_start, weekly_end
+    FROM professional_profiles WHERE user_id = ${userId}`)[0];
+  const offers = await ctx.sql`
+    SELECT c.slug, o.daily_rate_cents FROM service_offers o JOIN service_categories c ON c.id = o.category_id
+    WHERE o.professional_id = ${userId} AND o.active ORDER BY c.name`;
+  return {
+    profile: p ? { bio: p.bio as string | null, radius_km: p.radius_km as number, pix_key: p.pix_key as string, lat: Number(p.lat), lng: Number(p.lng) } : null,
+    offers: offers.map((o) => ({ category: o.slug as string, daily_rate_cents: Number(o.daily_rate_cents) })),
+    weekly: {
+      days: ((p?.weekly_days as number[] | undefined) ?? []).map(Number),
+      start_time: p?.weekly_start ? hhmm(p.weekly_start) : '06:00',
+      end_time: p?.weekly_end ? hhmm(p.weekly_end) : '20:00',
+    },
+  };
+}
+
+/** Tira um serviço da lista do profissional (some da busca; o histórico fica). */
+export async function removeOffer(ctx: Ctx, userId: string, categorySlug: string) {
+  const r = await ctx.sql`
+    UPDATE service_offers o SET active = false FROM service_categories c
+    WHERE c.id = o.category_id AND c.slug = ${categorySlug} AND o.professional_id = ${userId} AND o.active RETURNING o.id`;
+  if (!r[0]) throw notFound('Serviço');
 }
 
 export async function setVisibility(ctx: Ctx, userId: string, visible: boolean) {

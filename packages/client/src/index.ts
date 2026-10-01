@@ -132,6 +132,25 @@ export interface AdminSchedule {
   pending: (ScheduleSlot & { attempt: number; professional_name: string; accept_deadline_at: string | null })[];
 }
 
+/** O que a tela "Seu cadastro" precisa para abrir já preenchida. */
+export interface ProfessionalSetup {
+  profile: { bio: string | null; radius_km: number; pix_key: string; lat: number; lng: number } | null;
+  offers: { category: string; daily_rate_cents: number }[];
+  /** days: 1 = segunda ... 7 = domingo */
+  weekly: { days: number[]; start_time: string; end_time: string };
+}
+
+/** Dias da semana na ordem de exibição; `iso` é o número que a API usa (1 = segunda ... 7 = domingo). */
+export const WEEKDAYS = [
+  { iso: 1, label: 'Segunda-feira', short: 'Seg' },
+  { iso: 2, label: 'Terça-feira', short: 'Ter' },
+  { iso: 3, label: 'Quarta-feira', short: 'Qua' },
+  { iso: 4, label: 'Quinta-feira', short: 'Qui' },
+  { iso: 5, label: 'Sexta-feira', short: 'Sex' },
+  { iso: 6, label: 'Sábado', short: 'Sáb' },
+  { iso: 7, label: 'Domingo', short: 'Dom' },
+] as const;
+
 export interface KycItem { id: string; full_name: string; phone: string; kyc_status: string; radius_km: number; created_at: string }
 
 // ------------------------------------------------------------------ fotos
@@ -224,6 +243,11 @@ export function createClient(opts: ClientOptions) {
       call<{ category: string; daily_rate_cents: number }>('PUT', `/v1/professional/offers/${category}`, { daily_rate_cents, description }),
     saveAvailability: (day: string, start_time: string, end_time: string) =>
       call<{ day: string; start_time: string; end_time: string }>('PUT', `/v1/professional/availability/${day}`, { start_time, end_time }),
+    professionalSetup: () => call<ProfessionalSetup>('GET', '/v1/professional/setup'),
+    removeOffer: (category: string) => call<void>('DELETE', `/v1/professional/offers/${category}`),
+    /** Dias da semana em que atende (1 = segunda ... 7 = domingo) e o horário. Lista vazia desliga. */
+    saveWeekly: (days: number[], start_time: string, end_time: string) =>
+      call<{ days: number[]; start_time: string; end_time: string }>('PUT', '/v1/professional/availability/weekly', { days, start_time, end_time }),
     setVisible: (visible: boolean) => call<{ visible: boolean }>('PUT', '/v1/professional/status', { visible }),
 
     // operação

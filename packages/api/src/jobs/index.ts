@@ -1,5 +1,6 @@
 import { ApiError } from '../errors';
 import { applyAction, redirectOffer } from '../services/bookings';
+import { materializeWeekly, spToday } from '../services/accounts';
 import { runPayouts, sendRefunds } from '../services/payments';
 import type { Ctx } from '../types';
 
@@ -9,6 +10,7 @@ export interface JobSummary {
   expired_offers: number;
   no_shows: number;
   auto_approved: number;
+  weekly_extended: number;
   refunds_sent: number;
   payouts_sent: number;
   skipped: number;
@@ -25,7 +27,7 @@ export interface JobOptions {
  * então rodar duas vezes seguidas não duplica nada.
  */
 export async function runJobs(ctx: Ctx, opts: JobOptions): Promise<JobSummary> {
-  const s: JobSummary = { expired_payments: 0, resent_offers: 0, expired_offers: 0, no_shows: 0, auto_approved: 0, refunds_sent: 0, payouts_sent: 0, skipped: 0, errors: 0 };
+  const s: JobSummary = { expired_payments: 0, resent_offers: 0, expired_offers: 0, no_shows: 0, auto_approved: 0, weekly_extended: 0, refunds_sent: 0, payouts_sent: 0, skipped: 0, errors: 0 };
   const now = ctx.now();
   const iso = (d: Date) => d.toISOString();
 
@@ -87,7 +89,10 @@ export async function runJobs(ctx: Ctx, opts: JobOptions): Promise<JobSummary> {
     },
   );
 
-  // 5. Estornos pendentes e 6. repasses vencidos
+  // 5. Disponibilidade semanal: mantém sempre os próximos 28 dias preenchidos
+  s.weekly_extended = await materializeWeekly(ctx.sql, spToday(ctx));
+
+  // 6. Estornos pendentes e 7. repasses vencidos
   s.refunds_sent = await sendRefunds(ctx);
   if (opts.payouts) s.payouts_sent = await runPayouts(ctx);
   return s;

@@ -36,7 +36,7 @@ export default function Register() {
     <Screen>
       <Brand />
       <Title>Criar conta</Title>
-      <Muted>Como você vai usar o EasyLabor?</Muted>
+      <Muted>Como você vai usar o Easylabor?</Muted>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <Chip label="Quero contratar" on={role === 'client'} onPress={() => setRole('client')} />
         <Chip label="Sou profissional" on={role === 'professional'} onPress={() => setRole('professional')} />

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Sql } from '../src/db';
-import { ADDRESS_LOC, DAY, STARTS_AT, asIdentity, call, clock, makeApp, makeSql, seedAdminOnly } from './helpers';
+import { runJobs } from '../src/jobs';
+import { ADDRESS_LOC, DAY, STARTS_AT, asIdentity, call, clock, makeApp, makeCtx, makeSql, seedAdminOnly } from './helpers';
 
 let sql: Sql;
 let app: ReturnType<typeof makeApp>;
@@ -263,5 +264,141 @@ describe('exclusão da conta', () => {
   it('admin não se exclui pela API e sem login não há exclusão', async () => {
     expect((await call(app, 'DELETE', '/v1/me', admin)).status).toBe(403);
     expect((await call(app, 'DELETE', '/v1/me', null)).status).toBe(401);
+  });
+});
+
+
+describe('disponibilidade semanal e tela de cadastro do profissional', () => {
+  const profile = { lat: -20.275, lng: -40.28, radius_km: 10, pix_key: '12345678901' };
+  const weekly = (days: number[], start = '06:00', end = '20:00') => call(app, 'PUT', '/v1/professional/availability/weekly', PRO_AUTH, { days, start_time: start, end_time: end });
+  const isoDow = (day: string) => ((new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+  const horizon = (from = '2026-10-19', n = 28) => Array.from({ length: n }, (_, i) => new Date(Date.parse(`${from}T12:00:00Z`) + i * 86_400_000).toISOString().slice(0, 10));
+  const freeDays = async (source?: string) =>
+    (await sql`SELECT day::text AS day, source, status FROM availabilities WHERE professional_id = ${PRO_AUTH} ${source ? sql`AND source = ${source}` : sql``} ORDER BY day`).map((r) => r.day as string);
+
+  async function readyPro({ approve = true, offer = true } = {}) {
+    await registerClient();
+    await registerPro();
+    await call(app, 'PUT', '/v1/professional/profile', PRO_AUTH, profile);
+    if (offer) await call(app, 'PUT', '/v1/professional/offers/pintor', PRO_AUTH, { daily_rate_cents: 20000 });
+    if (approve) {
+      await call(app, 'POST', `/v1/admin/kyc/${PRO_AUTH}/decision`, admin, { decision: 'approve' });
+      await call(app, 'PUT', '/v1/professional/status', PRO_AUTH, { visible: true });
+    }
+    const addr = await call(app, 'POST', '/v1/client/addresses', CLIENT_AUTH, { street: 'Rua das Flores', city: 'Vitória', state: 'ES', ...ADDRESS_LOC });
+    return addr.json.id as string;
+  }
+  const search = (addressId: string, date: string) => call(app, 'GET', `/v1/search/professionals?category=pintor&date=${date}&address_id=${addressId}`, CLIENT_AUTH);
+
+  it('a tela de cadastro abre vazia para quem é novo e já preenchida depois de salvar', async () => {
+    await registerPro();
+    const empty = (await call(app, 'GET', '/v1/professional/setup', PRO_AUTH)).json;
+    expect(empty).toEqual({ profile: null, offers: [], weekly: { days: [], start_time: '06:00', end_time: '20:00' } });
+
+    await call(app, 'PUT', '/v1/professional/profile', PRO_AUTH, { ...profile, bio: 'Pintor há 12 anos' });
+    await call(app, 'PUT', '/v1/professional/offers/pintor', PRO_AUTH, { daily_rate_cents: 20000 });
+    await weekly([1, 3, 5], '07:30', '18:00');
+    const full = (await call(app, 'GET', '/v1/professional/setup', PRO_AUTH)).json;
+    expect(full.profile).toMatchObject({ bio: 'Pintor há 12 anos', radius_km: 10, pix_key: '12345678901' });
+    expect(full.profile.lat).toBeCloseTo(-20.275, 5);
+    expect(full.profile.lng).toBeCloseTo(-40.28, 5);
+    expect(full.offers).toEqual([{ category: 'pintor', daily_rate_cents: 20000 }]);
+    expect(full.weekly).toEqual({ days: [1, 3, 5], start_time: '07:30', end_time: '18:00' });
+  });
+
+  it('marcar segunda, quarta e sexta cria a agenda dos próximos 28 dias só nesses dias', async () => {
+    await readyPro();
+    const r = await weekly([5, 1, 3, 3]);
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ days: [1, 3, 5], start_time: '06:00', end_time: '20:00' });
+    const got = await freeDays('weekly');
+    const want = horizon().filter((d) => [1, 3, 5].includes(isoDow(d)));
+    expect(got).toEqual(want);
+    expect(want).toHaveLength(12);
+    const row = (await sql`SELECT start_time::text AS s, end_time::text AS e, status FROM availabilities WHERE professional_id = ${PRO_AUTH} AND source = 'weekly' LIMIT 1`)[0]!;
+    expect(row).toMatchObject({ s: '06:00:00', e: '20:00:00', status: 'free' });
+  });
+
+  it('todos os dias cobre os 28 dias; lista vazia desliga e apaga o que ainda está livre', async () => {
+    await readyPro();
+    await weekly([1, 2, 3, 4, 5, 6, 7]);
+    expect(await freeDays('weekly')).toEqual(horizon());
+    const off = await weekly([]);
+    expect(off.json.days).toEqual([]);
+    expect(await freeDays('weekly')).toEqual([]);
+    expect((await call(app, 'GET', '/v1/professional/setup', PRO_AUTH)).json.weekly.days).toEqual([]);
+  });
+
+  it('trocar os dias refaz só o que veio do modelo: ajuste manual e dia reservado ficam', async () => {
+    await readyPro();
+    await weekly([1, 3, 5]);
+    await call(app, 'PUT', '/v1/professional/availability/2026-10-21', PRO_AUTH, { start_time: '07:00', end_time: '12:00' }); // quarta, ajustada à mão
+    await sql`UPDATE availabilities SET status = 'reserved' WHERE professional_id = ${PRO_AUTH} AND day = '2026-10-23'`; // sexta, já reservada
+    await weekly([2, 4]);
+    const rows = await sql`SELECT day::text AS day, source, status FROM availabilities WHERE professional_id = ${PRO_AUTH} ORDER BY day`;
+    const weeklyFree = rows.filter((r) => r.source === 'weekly' && r.status === 'free').map((r) => r.day as string);
+    expect(weeklyFree.every((d) => [2, 4].includes(isoDow(d)))).toBe(true);
+    expect(weeklyFree).toHaveLength(horizon().filter((d) => [2, 4].includes(isoDow(d))).length);
+    expect(rows.find((r) => r.day === '2026-10-21')).toMatchObject({ source: 'manual', status: 'free' });
+    expect(rows.find((r) => r.day === '2026-10-23')).toMatchObject({ status: 'reserved' });
+  });
+
+  it('a busca só acha o profissional nos dias marcados', async () => {
+    const addr = await readyPro();
+    await weekly([1, 3, 5]);
+    expect((await search(addr, '2026-10-21')).json.items.map((i: any) => i.professional_id)).toEqual([PRO_AUTH]); // quarta
+    expect((await search(addr, '2026-10-22')).json.items).toEqual([]); // quinta
+    await weekly([4]);
+    expect((await search(addr, '2026-10-21')).json.items).toEqual([]);
+    expect((await search(addr, '2026-10-22')).json.items).toHaveLength(1);
+  });
+
+  it('valida dias, horário, perfil e perfil de acesso', async () => {
+    await registerClient();
+    await registerPro();
+    expect((await weekly([1])).json.error.code).toBe('profile_missing');
+    await call(app, 'PUT', '/v1/professional/profile', PRO_AUTH, profile);
+    expect((await weekly([8])).status).toBe(400);
+    expect((await weekly([0])).status).toBe(400);
+    expect((await weekly([1.5])).status).toBe(400);
+    expect((await weekly([1], '20:00', '06:00')).json.error.code).toBe('invalid_range');
+    expect((await weekly([1], '06:00', '06:00')).status).toBe(422);
+    expect((await call(app, 'PUT', '/v1/professional/availability/weekly', CLIENT_AUTH, { days: [1], start_time: '06:00', end_time: '20:00' })).status).toBe(403);
+    expect((await call(app, 'GET', '/v1/professional/setup', CLIENT_AUTH)).status).toBe(403);
+    expect((await call(app, 'GET', '/v1/professional/setup', null)).status).toBe(401);
+  });
+
+  it('a rotina diária estende o prazo sem duplicar nada', async () => {
+    await readyPro();
+    await weekly([1, 2, 3, 4, 5, 6, 7]);
+    const ctx = () => makeCtx(sql);
+    expect((await runJobs(ctx(), { payouts: false })).weekly_extended).toBe(0); // nada novo no mesmo dia
+    clock.now = new Date('2026-10-29T12:00:00Z'); // 10 dias depois
+    expect((await runJobs(ctx(), { payouts: false })).weekly_extended).toBe(10);
+    expect((await runJobs(ctx(), { payouts: false })).weekly_extended).toBe(0);
+    const days = await freeDays('weekly');
+    expect(days.at(-1)).toBe('2026-11-25');
+    expect(new Set(days).size).toBe(days.length);
+  });
+
+  it('remover um serviço tira o profissional da busca daquele serviço', async () => {
+    const addr = await readyPro();
+    await weekly([1, 2, 3, 4, 5, 6, 7]);
+    expect((await search(addr, '2026-10-21')).json.items).toHaveLength(1);
+    expect((await call(app, 'DELETE', '/v1/professional/offers/pintor', PRO_AUTH)).status).toBe(204);
+    expect((await search(addr, '2026-10-21')).json.items).toEqual([]);
+    expect((await call(app, 'GET', '/v1/professional/setup', PRO_AUTH)).json.offers).toEqual([]);
+    expect((await call(app, 'DELETE', '/v1/professional/offers/pintor', PRO_AUTH)).status).toBe(404);
+    expect((await call(app, 'DELETE', '/v1/professional/offers/pintor', CLIENT_AUTH)).status).toBe(403);
+    // salvar de novo reativa
+    await call(app, 'PUT', '/v1/professional/offers/pintor', PRO_AUTH, { daily_rate_cents: 21000 });
+    expect((await search(addr, '2026-10-21')).json.items[0].daily_rate_cents).toBe(21000);
+  });
+
+  it('depois de aprovado, com serviço e sem agenda, o próximo passo é definir a disponibilidade', async () => {
+    await readyPro();
+    expect((await call(app, 'GET', '/v1/me', PRO_AUTH)).json.next_step).toBe('add_availability');
+    await weekly([1, 2, 3, 4, 5]);
+    expect((await call(app, 'GET', '/v1/me', PRO_AUTH)).json.next_step).toBe('ready');
   });
 });
