@@ -1,4 +1,6 @@
+import { DEFAULT_CONFIG } from '@diaria/core';
 import { createApp } from '../src/app';
+import { createMockProvider, type PaymentProvider } from '../src/payments/provider';
 import { createSql, type Sql } from '../src/db';
 import type { AuthUser } from '../src/types';
 import { TEST_DB } from './globalSetup';
@@ -15,10 +17,11 @@ export function makeSql(): Sql {
   });
 }
 
-export function makeApp(sql: Sql, devRoutes = true) {
+export function makeApp(sql: Sql, devRoutes = true, paymentProvider?: PaymentProvider) {
   return createApp({
     sql,
     devRoutes,
+    paymentProvider,
     now: () => clock.now,
     // Simula o Supabase Auth: o cabeçalho x-test-auth-id (e x-test-phone) representa um token válido.
     identify: async (req) => {
@@ -119,4 +122,12 @@ export async function seedAdminOnly(sql: Sql): Promise<string> {
     INSERT INTO users (role, full_name, phone, accepted_terms_version, accepted_terms_at)
     VALUES ('admin', 'Operação', '+5527900000099', 'v1', now()) RETURNING id`;
   return r[0]!.id as string;
+}
+
+export const WEBHOOK_SECRET = 'segredo-de-teste';
+export const testProvider = () => createMockProvider({ webhookSecret: WEBHOOK_SECRET });
+
+/** Contexto para chamar as rotinas e serviços diretamente, com o relógio de teste. */
+export function makeCtx(sql: Sql, provider: PaymentProvider = testProvider()) {
+  return { sql, now: () => clock.now, config: DEFAULT_CONFIG, provider };
 }

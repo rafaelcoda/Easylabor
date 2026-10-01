@@ -40,6 +40,6 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 ## Pendências principais
 1. Confirmar que `/v1/categories` responde em produção (conexão com o banco).
 2. Login por telefone: a API já cadastra e controla acesso por perfil (testado com identidade simulada). Falta habilitar o login por telefone no Supabase (números de teste, depois provedor de SMS) e testar de ponta a ponta com `scripts/login-teste.mjs`. Envio de documentos do KYC ainda não existe.
-3. Sprint 3: provedor de pagamentos (Pix e cartão), webhooks idempotentes, repasses e funções agendadas da Netlify (expiração do aceite, no-show, aprovação automática).
+3. Pagamentos reais: ADIADO por decisão do projeto. Pronto: interface `PaymentProvider` + simulado, webhook idempotente, repasses (desligados), rotinas agendadas (aceite vencido com reenvio, ausência, aprovação automática, estornos). Falta escolher o provedor e escrever o adaptador; hoje o Pix gerado é simulado e nenhum pedido sai de "aguardando pagamento" em produção.
 4. Sprint 4: app em Expo (React Native). Sprint 5: painel web em Next.js (vai precisar de CORS na API).
 5. `Idempotency-Key`, reenvio automático após recusa, disputa, avaliações, chat e upload de arquivos.

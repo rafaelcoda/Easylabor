@@ -9,7 +9,7 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:test": "bash db/test.sh",
-    "build:functions": "esbuild netlify/handler.ts --bundle --platform=node --format=esm --target=node22 --outfile=netlify/functions/_generated/handler.mjs"
+    "build:functions": "esbuild netlify/handler.ts --bundle --platform=node --format=esm --target=node22 --outfile=netlify/functions/_generated/handler.mjs && esbuild netlify/jobs.ts --bundle --platform=node --format=esm --target=node22 --outfile=netlify/functions/_generated/jobs.mjs"
   },
   "devDependencies": {
     "@netlify/functions": "^6.0.1",

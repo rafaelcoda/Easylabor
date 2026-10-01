@@ -1,5 +1,6 @@
 import type { Config } from '@diaria/core';
 import type { Sql } from './db';
+import type { PaymentProvider } from './payments/provider';
 
 export type Role = 'client' | 'professional' | 'admin';
 
@@ -26,6 +27,8 @@ export interface Deps {
   identify?: Identify;
   now?: () => Date;
   config?: Config;
+  /** Provedor de pagamentos. Sem ele, usa o simulado (que não movimenta dinheiro). */
+  paymentProvider?: PaymentProvider;
   /** Rotas de desenvolvimento (simulam webhooks do provedor de pagamentos). Nunca em produção. */
   devRoutes?: boolean;
 }
@@ -34,4 +37,5 @@ export interface Ctx {
   sql: Sql;
   now: () => Date;
   config: Config;
+  provider: PaymentProvider;
 }

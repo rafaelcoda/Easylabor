@@ -5,10 +5,12 @@ import {
   autoApproveAt,
   availableActions,
   clientCancellation,
+  clientNoShow,
   ledger,
   payoutScheduledFor,
   pixExpiresAt,
   professionalCancellation,
+  professionalNoShow,
   quote as makeQuote,
   shouldSuspend,
   transition,
@@ -22,6 +24,7 @@ import { inTransaction, type Sql } from '../db';
 import { ApiError, conflict, forbidden, notFound, unprocessable } from '../errors';
 import type { AuthUser, Ctx } from '../types';
 import { newRef, writeLedger } from './ledgerWriter';
+import { searchProfessionals } from './search';
 
 // ------------------------------------------------------------------ tipos e leitura
 interface BookingRow {
@@ -94,7 +97,7 @@ async function toView(tx: Sql, b: BookingRow, user: AuthUser) {
   const actor = viewerActor(b, user);
   const showAddress = actor !== 'professional' || ADDRESS_VISIBLE_TO_PROFESSIONAL.includes(b.status);
   const events = await tx`
-    SELECT type, to_status, created_at FROM booking_events WHERE booking_id = ${b.id} ORDER BY created_at, id`;
+    SELECT type, to_status, created_at FROM booking_events WHERE booking_id = ${b.id} AND type <> 'booking.offered' ORDER BY created_at, id`;
   let payment: Record<string, unknown> | null = null;
   if (actor !== 'professional') {
     const p = await tx`
@@ -206,20 +209,34 @@ export async function createBooking(ctx: Ctx, user: AuthUser, input: CreateBooki
 
     const q = makeQuote(Number(o.daily_rate_cents), ctx.config);
     const code = (await tx`SELECT 'D-' || nextval('booking_code_seq') AS code`)[0]!.code as string;
-    const created = await tx`
-      INSERT INTO bookings (code, client_id, requested_by, professional_id, category_id, address_id, starts_at, ends_at,
-                            description, daily_rate_cents, client_fee_cents, commission_cents, status)
-      VALUES (${code}, ${user.id}, ${user.id}, ${input.professionalId}, ${o.category_id}, ${input.addressId},
-              ${startsAt.toISOString()}::timestamptz, ${endsAt.toISOString()}::timestamptz, ${input.description},
-              ${q.dailyRateCents}, ${q.clientFeeCents}, ${q.commissionCents}, 'awaiting_payment')
-      RETURNING id`;
-    const bookingId = created[0]!.id as string;
+    const bookingId = crypto.randomUUID();
+
+    // Cobrança Pix criada no provedor antes de gravar; se a gravação falhar, a cobrança expira sem ser paga.
+    let charge;
+    try {
+      charge = await ctx.provider.createPixCharge({
+        externalReference: bookingId,
+        amountCents: q.totalCents,
+        expiresAt: pixExpiresAt(ctx.now(), ctx.config),
+        description: `Diária ${code}`,
+      });
+    } catch {
+      throw new ApiError(502, 'payment_provider_error', 'Não foi possível gerar a cobrança agora. Tente novamente.');
+    }
 
     await tx`
-      INSERT INTO payments (booking_id, method, amount_cents, status, provider, pix_qr_payload, pix_expires_at)
-      VALUES (${bookingId}, 'pix', ${q.totalCents}, 'pending', 'mock', ${'MOCK-PIX-' + bookingId},
-              ${pixExpiresAt(ctx.now(), ctx.config).toISOString()}::timestamptz)`;
+      INSERT INTO bookings (id, code, client_id, requested_by, professional_id, category_id, address_id, starts_at, ends_at,
+                            description, daily_rate_cents, client_fee_cents, commission_cents, status)
+      VALUES (${bookingId}, ${code}, ${user.id}, ${user.id}, ${input.professionalId}, ${o.category_id}, ${input.addressId},
+              ${startsAt.toISOString()}::timestamptz, ${endsAt.toISOString()}::timestamptz, ${input.description},
+              ${q.dailyRateCents}, ${q.clientFeeCents}, ${q.commissionCents}, 'awaiting_payment')`;
+
+    await tx`
+      INSERT INTO payments (booking_id, method, amount_cents, status, provider, provider_payment_id, pix_qr_payload, pix_expires_at)
+      VALUES (${bookingId}, 'pix', ${q.totalCents}, 'pending', ${ctx.provider.name}, ${charge.providerPaymentId}, ${charge.qrPayload},
+              ${charge.expiresAt.toISOString()}::timestamptz)`;
     await recordEvent(tx, bookingId, 'booking.created', null, 'awaiting_payment', user.id, 'client', {});
+    await recordEvent(tx, bookingId, 'booking.offered', null, null, null, 'system', { professional_id: input.professionalId, attempt: 1 });
     return bookingId;
   });
 
@@ -289,16 +306,37 @@ export async function applyAction(ctx: Ctx, req: ActionRequest) {
       case 'payment_expired':
         await tx`UPDATE payments SET status = 'expired' WHERE booking_id = ${b.id} AND status = 'pending'`;
         break;
+      case 'accept_deadline_expired':
+        // Sem profissional que aceite (o reenvio já foi tentado): devolve tudo ao cliente.
+        await refundPayment(tx, b, q.totalCents, 'cancellation');
+        break;
       case 'accept':
         if (b.accept_deadline_at && now.getTime() > b.accept_deadline_at.getTime()) {
           throw conflict('accept_deadline_passed', 'O prazo para aceitar este pedido acabou');
         }
         break;
-      case 'decline': {
-        const next = afterUnaccepted(b.attempt, ctx.config);
+      case 'decline':
+        // Recusa terminal (o reenvio a outro profissional é tentado antes, em redirectOffer): estorno integral.
         meta.reason = body.reason ?? null;
-        meta.next = next; // "resend": o job de reenvio oferece ao próximo profissional (sprint 3)
-        if (next === 'refund') await refundPayment(tx, b, q.totalCents, 'cancellation');
+        await refundPayment(tx, b, q.totalCents, 'cancellation');
+        break;
+      case 'no_show_professional': {
+        const outcome = professionalNoShow(q);
+        meta.refund_cents = outcome.refundCents;
+        await refundPayment(tx, b, outcome.refundCents, 'no_show');
+        await registerStrike(tx, b.professional_id, b.id, now, ctx);
+        break;
+      }
+      case 'no_show_client': {
+        const earliest = b.starts_at.getTime() + ctx.config.lateAlertMinutes * 60_000;
+        if (now.getTime() < earliest) {
+          throw unprocessable('too_early', 'Aguarde 30 minutos após o horário combinado para registrar a ausência do cliente');
+        }
+        const outcome = clientNoShow(q, ctx.config);
+        meta.refund_cents = outcome.refundCents;
+        meta.compensation_cents = outcome.compensationCents;
+        await payCompensation(tx, b, outcome.compensationCents, now, ctx);
+        if (outcome.refundCents > 0) await refundPayment(tx, b, outcome.refundCents, 'no_show');
         break;
       }
       case 'check_in': {
@@ -405,4 +443,53 @@ async function registerStrike(tx: Sql, professionalId: string, bookingId: string
     const until = new Date(now.getTime() + 7 * 86_400_000);
     await tx`UPDATE users SET status = 'suspended', suspended_until = ${until.toISOString()}::timestamptz WHERE id = ${professionalId}`;
   }
+}
+
+
+// ------------------------------------------------------------------ reenvio ao próximo profissional
+const tzDate = (d: Date) => new Date(d.getTime() - 3 * 3_600_000).toISOString().slice(0, 10); // dia em São Paulo (UTC-3)
+
+/**
+ * Quando o profissional recusa ou deixa o prazo vencer, a oferta segue para o próximo do ranking
+ * (até o máximo de tentativas), mantendo o valor já pago pelo cliente. Devolve `true` se reenviou;
+ * `false` se não há candidato ou as tentativas acabaram (aí o chamador encerra e estorna).
+ */
+export async function redirectOffer(ctx: Ctx, bookingId: string, trigger: 'declined' | 'expired', actorId: string | null): Promise<boolean> {
+  return inTransaction(ctx.sql, async (tx) => {
+    const b = await loadBooking(tx, bookingId, true);
+    if (b.status !== 'requested' || afterUnaccepted(b.attempt, ctx.config) !== 'resend') return false;
+
+    const offered = await tx`
+      SELECT metadata->>'professional_id' AS pid FROM booking_events WHERE booking_id = ${b.id} AND type = 'booking.offered'`;
+    const already = new Set(offered.map((r) => r.pid as string));
+    already.add(b.professional_id);
+
+    const ranked = await searchProfessionals(
+      tx,
+      { category: b.category_slug, date: tzDate(b.starts_at), lat: b.addr_lat, lng: b.addr_lng, clientId: b.client_id, limit: 50 },
+      ctx.config,
+    );
+    let next: string | null = null;
+    for (const cand of ranked) {
+      if (already.has(cand.professional_id) || cand.daily_rate_cents > b.daily_rate_cents) continue;
+      const busy = await tx`
+        SELECT 1 FROM bookings WHERE professional_id = ${cand.professional_id} AND status IN ('accepted','en_route','in_progress')
+          AND tstzrange(starts_at, ends_at) && tstzrange(${b.starts_at.toISOString()}::timestamptz, ${b.ends_at.toISOString()}::timestamptz) LIMIT 1`;
+      if (!busy[0]) {
+        next = cand.professional_id;
+        break;
+      }
+    }
+    if (!next) return false;
+
+    const attempt = b.attempt + 1;
+    await tx`
+      UPDATE bookings SET professional_id = ${next}, attempt = ${attempt}, version = version + 1,
+             accept_deadline_at = ${acceptDeadline(ctx.now(), b.starts_at, ctx.config).toISOString()}::timestamptz
+      WHERE id = ${b.id}`;
+    await recordEvent(tx, b.id, 'booking.resent', 'requested', 'requested', actorId, actorId ? 'professional' : 'system',
+      { trigger, from_professional_id: b.professional_id, to_professional_id: next, attempt });
+    await recordEvent(tx, b.id, 'booking.offered', null, null, null, 'system', { professional_id: next, attempt });
+    return true;
+  });
 }

@@ -214,18 +214,40 @@ describe('aceite', () => {
     expect(r.json.error.code).toBe('slot_unavailable');
   });
 
-  it('recusa na 1ª tentativa deixa o pedido para reenvio; na 3ª estorna', async () => {
+  it('recusa passa a oferta ao próximo profissional, mantendo o valor pago', async () => {
     const a = await paidBooking(app, w);
-    const d1 = await call(app, 'POST', `/v1/bookings/${a.id}/decline`, w.pro, { reason: 'agenda cheia' });
-    expect(d1.json.status).toBe('declined');
-    expect((await sql`SELECT metadata FROM booking_events WHERE booking_id = ${a.id} AND type = 'booking.decline'`)[0]!.metadata).toMatchObject({ next: 'resend' });
+    const d = await call(app, 'POST', `/v1/bookings/${a.id}/decline`, w.pro, { reason: 'agenda cheia' });
+    expect(d.json).toMatchObject({ status: 'declined', resent: true });
+    const row = (await sql`SELECT status, professional_id, attempt, daily_rate_cents FROM bookings WHERE id = ${a.id}`)[0]!;
+    expect(row).toMatchObject({ status: 'requested', professional_id: w.pro2, attempt: 2, daily_rate_cents: 20000 });
     expect((await sql`SELECT count(*)::int AS n FROM refunds`)[0]!.n).toBe(0);
+    // o primeiro profissional perde o acesso; o novo vê o pedido, sem endereço até aceitar
+    expect((await call(app, 'GET', `/v1/bookings/${a.id}`, w.pro)).status).toBe(403);
+    const view = await call(app, 'GET', `/v1/bookings/${a.id}`, w.pro2);
+    expect(view.json.address).toBeNull();
+    expect((await call(app, 'POST', `/v1/bookings/${a.id}/accept`, w.pro2)).json.status).toBe('accepted');
+  });
 
+  it('sem outro candidato, a recusa encerra o pedido e estorna tudo', async () => {
+    await sql`UPDATE professional_profiles SET visible = false WHERE user_id = ${w.pro2}`;
+    const a = await paidBooking(app, w);
+    const d = await call(app, 'POST', `/v1/bookings/${a.id}/decline`, w.pro);
+    expect(d.json.status).toBe('declined');
+    expect((await sql`SELECT amount_cents, status FROM refunds`)[0]).toMatchObject({ amount_cents: 21000, status: 'pending' });
+    expect(await ledgerBalance(sql, a.id, 'escrow')).toBe(0);
+  });
+
+  it('não reenvia a quem cobra mais do que o cliente pagou, nem depois do limite de tentativas', async () => {
+    await sql`UPDATE service_offers SET daily_rate_cents = 25000 WHERE professional_id = ${w.pro2}`;
+    const a = await paidBooking(app, w);
+    expect((await call(app, 'POST', `/v1/bookings/${a.id}/decline`, w.pro)).json.status).toBe('declined');
+    expect((await sql`SELECT status FROM bookings WHERE id = ${a.id}`)[0]!.status).toBe('declined');
+
+    await sql`UPDATE service_offers SET daily_rate_cents = 20000 WHERE professional_id = ${w.pro2}`;
     const b = await paidBooking(app, w, { start_time: '09:00' });
     await sql`UPDATE bookings SET attempt = 3 WHERE id = ${b.id}`;
     await call(app, 'POST', `/v1/bookings/${b.id}/decline`, w.pro);
-    expect((await sql`SELECT amount_cents, status FROM refunds`)[0]).toMatchObject({ amount_cents: 21000, status: 'pending' });
-    expect(await ledgerBalance(sql, b.id, 'escrow')).toBe(0);
+    expect((await sql`SELECT status, professional_id FROM bookings WHERE id = ${b.id}`)[0]).toMatchObject({ status: 'declined', professional_id: w.pro });
   });
 });
 

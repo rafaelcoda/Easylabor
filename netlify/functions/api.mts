@@ -5,5 +5,5 @@ import { handle } from './_generated/handler.mjs';
 export default async (req: Request, _context: Context) => handle(req);
 
 export const config: Config = {
-  path: ['/health', '/v1/*'],
+  path: ['/health', '/v1/*', '/webhooks/*'],
 };

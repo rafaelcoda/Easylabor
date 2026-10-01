@@ -1,6 +1,7 @@
 import { createApp } from '../packages/api/src/app';
 import { authenticatorFrom, supabaseIdentity } from '../packages/api/src/auth';
 import { createSql } from '../packages/api/src/db';
+import { createMockProvider } from '../packages/api/src/payments/provider';
 
 // Variável global fornecida pelo runtime da Netlify.
 declare const Netlify: { env: { get(name: string): string | undefined } };
@@ -26,7 +27,10 @@ function getApp(): AppHandle | null {
   const identify = supabaseUrl && anonKey ? supabaseIdentity({ supabaseUrl, anonKey }) : async () => null;
   const authenticate = authenticatorFrom(identify, sql);
 
-  cached = createApp({ sql, authenticate, identify, devRoutes: Netlify.env.get('DEV_ROUTES') === 'true' });
+  // Provedor de pagamentos: por enquanto o simulado. O webhook só funciona com MOCK_WEBHOOK_SECRET definido.
+  const paymentProvider = createMockProvider({ webhookSecret: Netlify.env.get('MOCK_WEBHOOK_SECRET') });
+
+  cached = createApp({ sql, authenticate, identify, paymentProvider, devRoutes: Netlify.env.get('DEV_ROUTES') === 'true' });
   return cached;
 }
 

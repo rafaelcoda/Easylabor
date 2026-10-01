@@ -13,7 +13,7 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 | `packages/core` | Regras de negócio puras em TypeScript: preço, antecipação, máquina de estados do pedido, cancelamento e no-show, check-in por GPS, ranking, ledger em partidas dobradas, prazos. **44 testes passando.** |
 | `db/migrations` | Esquema PostgreSQL + PostGIS com as 27 tabelas da especificação, travas de integridade (horários sobrepostos, ledger balanceado, tabelas só de inserção). **15 testes SQL passando.** |
 | Banco na nuvem | Projeto **EasyLabor** no Supabase (região São Paulo, `sa-east-1`) com o esquema, o RLS e o seed aplicados. Ver seção abaixo. |
-| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **45 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
+| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **64 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
 | `netlify/` | Função que expõe a API na Netlify (`handler.ts` + `functions/api.mts`). Site `easylabor-api` ligado ao GitHub. |
 | App (Expo), painel web | Ainda não iniciados (sprints 4 e 5 abaixo). |
 
@@ -64,11 +64,22 @@ Supabase (`src/edge.ts`). A API conecta direto ao PostgreSQL com credencial de s
 
 Erros seguem o formato `{ error: { code, message, details, request_id } }` da especificação.
 
-**Variáveis de ambiente:** `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DEV_ROUTES` (só em desenvolvimento), `PORT`.
+**Variáveis de ambiente:** `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DEV_ROUTES` (só em desenvolvimento), `MOCK_WEBHOOK_SECRET` (só para testar o webhook), `PORT`.
 
 **Ainda não feito na API:** `Idempotency-Key`, reenvio automático ao próximo profissional após recusa ou prazo vencido
 (depende dos jobs da sprint 3), disputa, avaliações, chat, upload de arquivos, cadastro e KYC do profissional,
 antecipação, rotas de admin e webhooks reais do provedor.
+
+**Rotinas automáticas (função agendada `jobs`, a cada 5 minutos):** expiram o Pix não pago; passam a oferta ao próximo
+profissional quando o aceite vence ou há recusa (até 3 tentativas, mantendo o valor pago e só para quem cobra igual ou menos);
+marcam a ausência do profissional 60 min depois do horário (estorno integral e penalidade); aprovam sozinhas 24 h após o
+check-out; e pedem os estornos pendentes. `POST /v1/bookings/:id/report-client-no-show` registra a ausência do cliente
+(depois de 30 min: 50% da diária ao profissional, o resto volta ao cliente).
+
+**Pagamentos (adiados):** a integração com um provedor real **foi pulada por decisão do projeto**. Existe a interface
+`PaymentProvider` (`packages/api/src/payments`) com uma versão simulada que não movimenta dinheiro; webhook seguro e
+idempotente em `POST /webhooks/payments` (assinatura obrigatória; sem `MOCK_WEBHOOK_SECRET` responde 503); repasses
+(`runPayouts`) **desligados** na função agendada. Escolher o provedor depois = escrever um adaptador dessa interface.
 
 **Login e cadastro:** o login é por telefone (Supabase Auth). O token vale para `/v1/me` e `/v1/me/register` mesmo sem
 cadastro; as demais rotas exigem usuário cadastrado e ativo, e cada rota confere o perfil (cliente, profissional ou admin).

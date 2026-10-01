@@ -6,7 +6,9 @@ import {
   createAddress, deleteAddress, getMe, kycDecision, kycQueue, listAddresses, register, setAvailability, setVisibility,
   upsertOffer, upsertProfessionalProfile,
 } from './services/accounts';
-import { applyAction, createBooking, getBooking, listBookings } from './services/bookings';
+import { createMockProvider } from './payments/provider';
+import { applyAction, createBooking, getBooking, listBookings, redirectOffer } from './services/bookings';
+import { handlePaymentEvent } from './services/payments';
 import { searchProfessionals } from './services/search';
 import type { AuthUser, Ctx, Deps, Identity, Role } from './types';
 
@@ -67,6 +69,7 @@ const ACTIONS: Record<string, { action: BookingAction | 'cancel'; body: z.ZodTyp
     body: z.object({ ...coords, photo_keys: z.array(z.string().min(1)).max(20), note: z.string().max(500).optional() }),
   },
   approve: { action: 'approve', body: z.object({}).passthrough() },
+  'report-client-no-show': { action: 'no_show_client', body: z.object({}).passthrough() },
   cancel: { action: 'cancel', body: z.object({ reason: z.string().max(300).optional() }) },
 };
 
@@ -115,7 +118,12 @@ const visibilityBody = z.object({ visible: z.boolean() });
 const kycBody = z.object({ decision: z.enum(['approve', 'reject']), reason: z.string().max(300).optional() });
 
 export function createApp(deps: Deps) {
-  const ctx: Ctx = { sql: deps.sql, now: deps.now ?? (() => new Date()), config: deps.config ?? DEFAULT_CONFIG };
+  const ctx: Ctx = {
+    sql: deps.sql,
+    now: deps.now ?? (() => new Date()),
+    config: deps.config ?? DEFAULT_CONFIG,
+    provider: deps.paymentProvider ?? createMockProvider(),
+  };
   const app = new Hono<Env>();
 
   app.use('*', async (c, next) => {
@@ -285,6 +293,15 @@ export function createApp(deps: Deps) {
     const raw = c.req.header('content-length') === '0' ? {} : await jsonBody(c.req.raw).catch(() => ({}));
     const body = parse(route.body, raw) as Record<string, unknown>;
 
+    // Recusa: primeiro tenta passar a oferta ao próximo profissional; se não houver, encerra e estorna.
+    if (route.action === 'decline') {
+      const row = (await ctx.sql`SELECT professional_id, status FROM bookings WHERE id = ${id}`)[0];
+      if (!row) throw notFound('Pedido');
+      if (user.role === 'professional' && row.professional_id === user.id && row.status === 'requested') {
+        if (await redirectOffer(ctx, id, 'declined', user.id)) return c.json({ id, status: 'declined', resent: true });
+      }
+    }
+
     let action: BookingAction;
     if (route.action === 'cancel') {
       const rows = await ctx.sql`SELECT client_id, professional_id FROM bookings WHERE id = ${id}`;
@@ -294,6 +311,14 @@ export function createApp(deps: Deps) {
       action = route.action;
     }
     return c.json(await applyAction(ctx, { bookingId: id, action, user, body }));
+  });
+
+  // ---- webhook do provedor de pagamentos (fora de /v1: a autenticidade vem da assinatura, não do login)
+  app.post('/webhooks/payments', async (c) => {
+    const raw = await c.req.text();
+    const evt = await ctx.provider.verifyWebhook(raw, c.req.raw.headers);
+    if (!evt) return c.json({ ok: true, ignored: true });
+    return c.json({ ok: true, ...(await handlePaymentEvent(ctx, evt)) });
   });
 
   // ---- desenvolvimento: simula o webhook de pagamento confirmado do provedor
