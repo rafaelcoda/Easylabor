@@ -1,5 +1,6 @@
 import { Redirect } from 'expo-router';
 import { useState } from 'react';
+import { Brand } from '../components/Brand';
 import { Button, ErrorText, Field, Muted, Screen, Title } from '../components/ui';
 import { useSession } from '../lib/session';
 
@@ -28,6 +29,7 @@ export default function Login() {
 
   return (
     <Screen>
+      <Brand />
       <Title>Entrar</Title>
       <Muted>Use seu celular. Enviamos um código para confirmar que o número é seu.</Muted>
       <Field label="Celular (com +55 e DDD)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" autoComplete="tel" editable={!sent} />

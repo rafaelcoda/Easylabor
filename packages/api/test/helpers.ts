@@ -17,11 +17,12 @@ export function makeSql(): Sql {
   });
 }
 
-export function makeApp(sql: Sql, devRoutes = true, paymentProvider?: PaymentProvider) {
+export function makeApp(sql: Sql, devRoutes = true, paymentProvider?: PaymentProvider, extra: { verifyPhotoUploads?: boolean } = {}) {
   return createApp({
     sql,
     devRoutes,
     paymentProvider,
+    ...extra,
     now: () => clock.now,
     // Simula o Supabase Auth: o cabeçalho x-test-auth-id (e x-test-phone) representa um token válido.
     identify: async (req) => {
@@ -129,5 +130,9 @@ export const testProvider = () => createMockProvider({ webhookSecret: WEBHOOK_SE
 
 /** Contexto para chamar as rotinas e serviços diretamente, com o relógio de teste. */
 export function makeCtx(sql: Sql, provider: PaymentProvider = testProvider()) {
-  return { sql, now: () => clock.now, config: DEFAULT_CONFIG, provider };
+  return { sql, now: () => clock.now, config: DEFAULT_CONFIG, provider, verifyPhotoUploads: false };
 }
+
+/** Chaves de foto no formato exigido: <usuário>/<pedido>/<arquivo>. */
+export const photoKeys = (userId: string, bookingId: string, n: number) =>
+  Array.from({ length: n }, (_, i) => `${userId}/${bookingId}/foto-${i + 1}.jpg`);

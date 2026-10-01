@@ -4,7 +4,7 @@ import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { ApiError, conflict, forbidden, notFound } from './errors';
 import {
-  createAddress, deleteAddress, getMe, kycDecision, kycQueue, listAddresses, register, setAvailability, setVisibility,
+  createAddress, deleteAccount, deleteAddress, getMe, kycDecision, kycQueue, listAddresses, register, setAvailability, setVisibility,
   upsertOffer, upsertProfessionalProfile,
 } from './services/accounts';
 import { createMockProvider } from './payments/provider';
@@ -125,6 +125,7 @@ export function createApp(deps: Deps) {
     now: deps.now ?? (() => new Date()),
     config: deps.config ?? DEFAULT_CONFIG,
     provider: deps.paymentProvider ?? createMockProvider(),
+    verifyPhotoUploads: deps.verifyPhotoUploads ?? false,
   };
   const app = new Hono<Env>();
 
@@ -192,6 +193,8 @@ export function createApp(deps: Deps) {
     const identity = c.get('identity');
     return c.json({ registered: false, id: identity?.id, phone: identity?.phone ?? null, next_step: 'register' });
   });
+
+  app.delete('/v1/me', async (c) => c.json(await deleteAccount(ctx, userOf(c))));
 
   app.post('/v1/me/register', async (c) => {
     if (c.get('user')) throw conflict('already_registered', 'Este usuário já está cadastrado');

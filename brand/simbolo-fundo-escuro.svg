@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 30 590 700" role="img" aria-label="Easylabor">
+  <defs><linearGradient id="m" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2F7FC0"/><stop offset="1" stop-color="#4FA3DD"/></linearGradient><linearGradient id="a" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#4EB4DC"/><stop offset="1" stop-color="#5CC8E8"/></linearGradient><linearGradient id="v" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#7DB63A"/><stop offset="1" stop-color="#9CC84A"/></linearGradient><linearGradient id="l" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#F0AE35"/><stop offset="1" stop-color="#F7C54D"/></linearGradient></defs>
+  <path fill="url(#v)" d="M52 590 C58 536 96 506 138 502 L142 524 C165 538 190 540 225 532 L480 480 C520 472 548 485 546 515 C543 575 500 620 440 635 L175 695 C105 712 52 688 52 625 Z"/>
+  <path fill="url(#a)" d="M52 592 L52 450 C52 380 95 345 170 325 L365 288 C395 283 412 300 412 330 C412 385 380 425 320 442 L175 484 C152 490 138 498 138 508 C100 520 62 548 52 592 Z"/>
+  <path fill="url(#m)" d="M55 360 L55 225 C55 170 95 140 160 125 L505 50 C535 45 548 60 543 90 C535 150 495 185 425 205 L120 285 C85 295 65 320 55 360 Z"/>
+  <circle cx="535" cy="355" r="70" fill="url(#l)"/>
+</svg>

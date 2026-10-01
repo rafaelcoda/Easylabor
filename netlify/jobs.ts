@@ -15,7 +15,7 @@ export async function runScheduled(): Promise<JobSummary | { skipped: string }> 
   if (!databaseUrl) return { skipped: 'DATABASE_URL ausente' };
   const sql = createSql(databaseUrl, { max: 1, prepare: false, idle_timeout: 5, connect_timeout: 10, connection: {} });
   try {
-    return await runJobs({ sql, now: () => new Date(), config: DEFAULT_CONFIG, provider: createMockProvider() }, { payouts: false });
+    return await runJobs({ sql, now: () => new Date(), config: DEFAULT_CONFIG, provider: createMockProvider(), verifyPhotoUploads: false }, { payouts: false });
   } finally {
     await sql.end({ timeout: 2 }).catch(() => undefined);
   }

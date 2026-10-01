@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Sql } from '../src/db';
-import { ADDRESS_LOC, DAY, STARTS_AT, bookingBody, call, clock, ledgerBalance, makeApp, makeSql, paidBooking, seedWorld, type World } from './helpers';
+import { ADDRESS_LOC, DAY, STARTS_AT, bookingBody, call, clock, ledgerBalance, makeApp, makeSql, paidBooking, photoKeys, seedWorld, type World } from './helpers';
 
 let sql: Sql;
 let app: ReturnType<typeof makeApp>;
@@ -142,9 +142,9 @@ describe('fluxo completo do pedido', () => {
 
     // check-out: pintor exige 2 fotos
     clock.now = new Date(STARTS_AT.getTime() + 8 * 3_600_000);
-    const few = await call(app, 'POST', `/v1/bookings/${id}/check-out`, w.pro, { ...ADDRESS_LOC, photo_keys: ['a'] });
+    const few = await call(app, 'POST', `/v1/bookings/${id}/check-out`, w.pro, { ...ADDRESS_LOC, photo_keys: photoKeys(w.pro, id, 1) });
     expect(few.json.error.code).toBe('not_enough_photos');
-    const out = await call(app, 'POST', `/v1/bookings/${id}/check-out`, w.pro, { ...ADDRESS_LOC, photo_keys: ['a', 'b'] });
+    const out = await call(app, 'POST', `/v1/bookings/${id}/check-out`, w.pro, { ...ADDRESS_LOC, photo_keys: photoKeys(w.pro, id, 2) });
     expect(out.json.status).toBe('completed');
     expect(out.json.auto_approve_at).toBe(new Date(clock.now.getTime() + 24 * 3_600_000).toISOString());
 

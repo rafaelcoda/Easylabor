@@ -204,3 +204,45 @@ export async function kycDecision(ctx: Ctx, admin: AuthUser, userId: string, dec
   });
   return { user_id: userId, kyc_status: decision === 'approve' ? 'approved' : 'rejected' };
 }
+
+
+// ------------------------------------------------------------------ exclusão da conta (exigida pelas lojas e pela LGPD)
+/** Pedidos que ainda podem movimentar serviço ou dinheiro: enquanto houver algum, a conta não pode ser excluída. */
+const OPEN_STATUSES = ['awaiting_payment', 'requested', 'accepted', 'en_route', 'in_progress', 'completed', 'disputed', 'approved'];
+
+/**
+ * Anonimiza a conta: some o nome, o telefone, o e-mail e o CPF, e a conta deixa de entrar. Os pedidos continuam
+ * (precisam ser guardados por motivos fiscais e de disputa), mas sem identificar a pessoa. Endereços, documentos,
+ * dispositivos e notificações são apagados.
+ */
+export async function deleteAccount(ctx: Ctx, user: AuthUser) {
+  if (user.role === 'admin') throw forbidden('Contas de administrador são removidas pela operação');
+  await inTransaction(ctx.sql, async (tx) => {
+    const open = await tx`
+      SELECT code FROM bookings
+      WHERE (client_id = ${user.id} OR professional_id = ${user.id}) AND status = ANY(${OPEN_STATUSES}) LIMIT 5`;
+    if (open.length > 0) {
+      throw conflict('open_bookings', 'Você tem pedidos em andamento. Conclua ou cancele antes de excluir a conta.', { codes: open.map((r) => r.code) });
+    }
+    const pending = await tx`
+      SELECT 1 FROM payouts WHERE professional_id = ${user.id} AND status IN ('scheduled', 'processing') LIMIT 1`;
+    if (pending[0]) throw conflict('pending_payout', 'Você tem um repasse a receber. Aguarde o pagamento antes de excluir a conta.');
+
+    const tag = user.id.replace(/-/g, '').slice(0, 12);
+    await tx`
+      UPDATE users SET full_name = 'Usuário removido', phone = ${'removido:' + tag}, email = NULL, cpf = NULL,
+                       status = 'deleted', deleted_at = ${ctx.now().toISOString()}::timestamptz, phone_verified_at = NULL
+      WHERE id = ${user.id}`;
+    await tx`UPDATE professional_profiles SET visible = false, bio = NULL, photo_url = NULL, pix_key = 'removido' WHERE user_id = ${user.id}`;
+    await tx`UPDATE client_profiles SET cnpj = NULL, legal_name = NULL WHERE user_id = ${user.id}`;
+    await tx`DELETE FROM documents WHERE user_id = ${user.id}`;
+    await tx`DELETE FROM device_tokens WHERE user_id = ${user.id}`;
+    await tx`DELETE FROM notifications WHERE user_id = ${user.id}`;
+    // Endereços usados em pedidos precisam ficar (chave estrangeira): perdem o texto que identifica o local.
+    await tx`UPDATE addresses SET street = 'removido', number = NULL, complement = NULL, reference = NULL, label = NULL, zip = NULL WHERE client_id = ${user.id}`;
+    await tx`
+      INSERT INTO audit_logs (actor_id, action, entity, entity_id, before, after)
+      VALUES (${user.id}, 'user.deleted', 'users', ${user.id}, NULL, ${tx.json({ status: 'deleted' } as never)})`;
+  });
+  return { deleted: true };
+}

@@ -32,7 +32,7 @@ function getApp(): AppHandle | null {
 
   const corsOrigins = (Netlify.env.get('CORS_ORIGINS') ?? '').split(',').map((o) => o.trim()).filter(Boolean);
 
-  cached = createApp({ sql, authenticate, identify, paymentProvider, corsOrigins, devRoutes: Netlify.env.get('DEV_ROUTES') === 'true' });
+  cached = createApp({ sql, authenticate, identify, paymentProvider, corsOrigins, verifyPhotoUploads: true, devRoutes: Netlify.env.get('DEV_ROUTES') === 'true' });
   return cached;
 }
 

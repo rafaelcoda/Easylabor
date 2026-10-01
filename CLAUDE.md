@@ -42,6 +42,13 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 - Não colar credenciais em conversas. Se vazar, redefinir na hora.
 - Jurídico: o risco de vínculo trabalhista precisa de parecer antes do lançamento; não mudar regras de preço ou penalidade sem revisar isso.
 
+## Fotos (Supabase Storage)
+- Bucket privado `booking-photos`; caminho obrigatório `<usuário>/<pedido>/<arquivo>` (função `photoPath` em `packages/client`).
+- O app envia direto ao Supabase com o login do usuário; as políticas em `storage.objects` (migração 0004) decidem quem envia e quem vê. A API só confere, no check-out, que as fotos existem (`verifyPhotoUploads`, ligado em produção).
+
+## Lojas de aplicativos
+- Documentos em `docs/lojas/`. Contas Apple/Google, SMS real, pagamento e revisão jurídica ainda são pré-requisitos para o público.
+
 ## Antes de abrir ao público
 - Apagar `public/teste-interno.html` (página de teste) e os números de teste com código fixo do Supabase Auth.
 - Proteger ou remover o diagnóstico `GET /health?db=1`.
@@ -50,5 +57,5 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 1. Confirmar que `/v1/categories` responde em produção (conexão com o banco).
 2. Login por telefone: a API já cadastra e controla acesso por perfil (testado com identidade simulada). Falta habilitar o login por telefone no Supabase (números de teste, depois provedor de SMS) e testar de ponta a ponta com `scripts/login-teste.mjs`. Envio de documentos do KYC ainda não existe.
 3. Pagamentos reais: ADIADO por decisão do projeto. Pronto: interface `PaymentProvider` + simulado, webhook idempotente, repasses (desligados), rotinas agendadas (aceite vencido com reenvio, ausência, aprovação automática, estornos). Falta escolher o provedor e escrever o adaptador; hoje o Pix gerado é simulado e nenhum pedido sai de "aguardando pagamento" em produção.
-4. App (`apps/mobile`) e painel (`apps/panel`) existem em versão inicial. Falta: upload de fotos (Supabase Storage) para o check-out, notificações push, avaliações, chat, disputas no painel, publicar o painel no Netlify (site `easylabor-painel`, base `apps/panel`) e gerar o app nas lojas (EAS).
+4. App (`apps/mobile`) e painel (`apps/panel`) existem em versão inicial. Fotos do check-out (Supabase Storage) e exclusão de conta já existem. Falta: notificações push, avaliações, chat, disputas no painel, publicar o painel no Netlify (site `easylabor-painel`, base `apps/panel`) e gerar o app nas lojas (EAS).
 5. `Idempotency-Key`, reenvio automático após recusa, disputa, avaliações, chat e upload de arquivos.

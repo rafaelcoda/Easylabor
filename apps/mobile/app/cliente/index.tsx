@@ -6,6 +6,7 @@ import { useSession } from '../../lib/session';
 import { addDays, todaySP } from '../../lib/format';
 import { useLoad } from '../../lib/useLoad';
 import { Text } from 'react-native';
+import { C } from '../../lib/theme';
 
 export default function Inicio() {
   const { api } = useSession();
@@ -36,11 +37,11 @@ export default function Inicio() {
         <View style={{ flex: 1 }}><Button label="Próximo dia" kind="secondary" onPress={() => setDay(addDays(day, 1))} /></View>
       </View>
 
-      <Text style={{ fontWeight: '700', color: '#4B5D7A', marginTop: 6 }}>Onde será o serviço</Text>
+      <Text style={{ fontWeight: '700', color: C.muted, marginTop: 6 }}>Onde será o serviço</Text>
       {addressList.length === 0 && <Muted>Cadastre o endereço do serviço para buscar profissionais perto.</Muted>}
       {addressList.map((a) => (
         <Card key={a.id} onPress={() => setAddressId(a.id)}>
-          <Text style={{ fontWeight: '700', color: chosenAddress === a.id ? '#1A5FD0' : '#0F2342' }}>{chosenAddress === a.id ? '● ' : '○ '}{a.street}{a.number ? `, ${a.number}` : ''}</Text>
+          <Text style={{ fontWeight: '700', color: chosenAddress === a.id ? C.pri : C.ink }}>{chosenAddress === a.id ? '● ' : '○ '}{a.street}{a.number ? `, ${a.number}` : ''}</Text>
           <Muted>{[a.district, a.city].filter(Boolean).join(' · ')}</Muted>
         </Card>
       ))}

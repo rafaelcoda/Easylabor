@@ -1,6 +1,7 @@
 import { Redirect } from 'expo-router';
 import { useState } from 'react';
 import { Switch, Text, View } from 'react-native';
+import { Brand } from '../components/Brand';
 import { Button, Chip, ErrorText, Field, Muted, Screen, Title } from '../components/ui';
 import { errorMessage } from '../lib/client';
 import { TERMS_VERSION } from '../lib/config';
@@ -33,6 +34,7 @@ export default function Register() {
 
   return (
     <Screen>
+      <Brand />
       <Title>Criar conta</Title>
       <Muted>Como você vai usar o EasyLabor?</Muted>
       <View style={{ flexDirection: 'row', gap: 10 }}>

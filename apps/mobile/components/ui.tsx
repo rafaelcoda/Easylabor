@@ -31,7 +31,7 @@ export function Field({ label, ...rest }: { label: string } & TextInputProps) {
   return (
     <View style={{ gap: 6 }}>
       <Text style={s.label}>{label}</Text>
-      <TextInput accessibilityLabel={label} placeholderTextColor="#8A99B3" style={s.input} {...rest} />
+      <TextInput accessibilityLabel={label} placeholderTextColor={C.muted} style={s.input} {...rest} />
     </View>
   );
 }

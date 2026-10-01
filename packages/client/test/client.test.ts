@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiClientError, STATUS_LABEL, createClient, errorMessage, formatBRL } from '../src';
+import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, createClient, errorMessage, formatBRL, photoPath } from '../src';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const make = (impl: (url: string, init: RequestInit) => Response | Promise<Response>, token: string | null = 'tok') => {
@@ -69,5 +69,12 @@ describe('cliente da API', () => {
     expect(formatBRL(17072)).toBe('R$ 170,72');
     expect(Object.keys(STATUS_LABEL)).toHaveLength(16);
     expect(errorMessage('x')).toBe('Algo deu errado. Tente novamente.');
+  });
+
+  it('monta o caminho da foto no formato exigido pela API e limpa o nome do arquivo', () => {
+    expect(PHOTO_BUCKET).toBe('booking-photos');
+    expect(photoPath('u1', 'b1', 'foto 1.jpg')).toBe('u1/b1/foto-1.jpg');
+    expect(photoPath('u1', 'b1', '../x.jpg')).toBe('u1/b1/..-x.jpg');
+    expect(photoPath('u1', 'b1', 'a/b.jpg')).not.toContain('a/b');
   });
 });

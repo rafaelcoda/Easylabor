@@ -1,19 +1,56 @@
 {
   "expo": {
-    "name": "EasyLabor",
+    "name": "Easylabor",
     "slug": "easylabor",
     "scheme": "easylabor",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "ios": { "supportsTablet": false, "bundleIdentifier": "br.com.easylabor.app" },
-    "android": { "package": "br.com.easylabor.app" },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.easylabor.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "br.com.easylabor.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#12304C"
+      }
+    },
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      ["expo-location", { "locationWhenInUsePermission": "O EasyLabor usa sua localização para registrar o endereço e confirmar sua chegada ao serviço." }]
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O EasyLabor usa sua localização para registrar o endereço e confirmar sua chegada ao serviço."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O EasyLabor usa a câmera para fotografar o resultado do serviço.",
+          "photosPermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "backgroundColor": "#12304C",
+          "imageWidth": 200
+        }
+      ]
     ],
-    "experiments": { "typedRoutes": false }
+    "experiments": {
+      "typedRoutes": false
+    },
+    "icon": "./assets/icon.png"
   }
 }

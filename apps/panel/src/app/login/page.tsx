@@ -32,7 +32,7 @@ export default function LoginPage() {
 
   return (
     <div className="login card">
-      <h1>diária · Operação</h1>
+      <div className="logo-head"><img src="/simbolo.svg" alt="" /><div><div className="t">Easylabor</div><div className="s">Plataforma de Serviços · Operação</div></div></div>
       <p className="muted">Entre com o telefone da sua conta de administrador.</p>
       <label htmlFor="phone">Telefone (com +55)</label>
       <input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { runJobs } from '../src/jobs';
 import type { Sql } from '../src/db';
-import { ADDRESS_LOC, STARTS_AT, bookingBody, call, clock, ledgerBalance, makeApp, makeCtx, makeSql, paidBooking, seedWorld, type World } from './helpers';
+import { ADDRESS_LOC, STARTS_AT, bookingBody, call, clock, ledgerBalance, makeApp, makeCtx, makeSql, paidBooking, photoKeys, seedWorld, type World } from './helpers';
 
 let sql: Sql;
 let app: ReturnType<typeof makeApp>;
@@ -120,7 +120,7 @@ describe('aprovação automática', () => {
     clock.now = new Date(STARTS_AT.getTime() - min(10));
     await call(app, 'POST', `/v1/bookings/${b.id}/check-in`, w.pro, ADDRESS_LOC);
     clock.now = new Date(STARTS_AT.getTime() + 8 * 3_600_000);
-    await call(app, 'POST', `/v1/bookings/${b.id}/check-out`, w.pro, { ...ADDRESS_LOC, photo_keys: ['a', 'b'] });
+    await call(app, 'POST', `/v1/bookings/${b.id}/check-out`, w.pro, { ...ADDRESS_LOC, photo_keys: photoKeys(w.pro, b.id, 2) });
     return b.id;
   }
 

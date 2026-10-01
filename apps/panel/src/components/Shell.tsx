@@ -26,6 +26,7 @@ export function Shell({ title, subtitle, children }: { title: string; subtitle?:
   if (state.status === 'denied') {
     return (
       <div className="login card">
+        <div className="logo-head"><img src="/simbolo.svg" alt="" /><div><div className="t">Easylabor</div><div className="s">Operação</div></div></div>
         <h1>Acesso restrito</h1>
         <p className="muted">Esta área é só da operação. Sua conta não tem permissão de administrador.</p>
         <button className="btn sec" onClick={signOut}>Sair</button>
@@ -35,8 +36,8 @@ export function Shell({ title, subtitle, children }: { title: string; subtitle?:
   return (
     <div className="shell">
       <aside className="side">
-        <div className="brand">diária</div>
-        <div className="sub">operação</div>
+        <div className="brand"><img src="/simbolo-fundo-escuro.svg" alt="" />Easylabor</div>
+        <div className="sub">Operação</div>
         {NAV.map((n) => (
           <Link key={n.href} href={n.href} className={path === n.href || path === n.href.slice(0, -1) ? 'on' : ''}>{n.label}</Link>
         ))}

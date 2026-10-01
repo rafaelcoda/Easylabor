@@ -5,6 +5,7 @@ import { Back, Button, Card, Chip, ErrorText, Field, Muted, Screen, Title } from
 import { errorMessage, formatBRL } from '../lib/client';
 import { useSession } from '../lib/session';
 import { useLoad } from '../lib/useLoad';
+import { C } from '../lib/theme';
 
 export default function Solicitar() {
   const { api } = useSession();
@@ -39,7 +40,7 @@ export default function Solicitar() {
       <Title>Solicitar {p.name}</Title>
       <Muted>{p.date.split('-').reverse().join('/')}</Muted>
       <Field label="Horário de início (HH:MM)" value={start} onChangeText={setStart} keyboardType="numbers-and-punctuation" />
-      <Text style={{ fontWeight: '700', color: '#4B5D7A' }}>Duração</Text>
+      <Text style={{ fontWeight: '700', color: C.muted }}>Duração</Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {[4, 6, 8].map((h) => <Chip key={h} label={`${h} horas`} on={hours === h} onPress={() => setHours(h)} />)}
       </View>

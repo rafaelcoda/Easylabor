@@ -87,6 +87,7 @@ export interface Booking {
   accept_deadline_at: string | null;
   auto_approve_at: string | null;
   payment: { id: string; method: string; status: string; amount_cents: number; pix_qr_payload: string | null; pix_expires_at: string | null } | null;
+  photos: { key: string; at: string }[];
   available_actions: string[];
   timeline: { type: string; to_status: string | null; at: string }[];
   version: number;
@@ -132,6 +133,13 @@ export interface AdminSchedule {
 }
 
 export interface KycItem { id: string; full_name: string; phone: string; kyc_status: string; radius_km: number; created_at: string }
+
+// ------------------------------------------------------------------ fotos
+/** Bucket privado do Supabase Storage onde ficam as fotos do serviço. */
+export const PHOTO_BUCKET = 'booking-photos';
+
+/** Caminho de uma foto: <usuário que enviou>/<pedido>/<arquivo>. A API e o banco exigem exatamente este formato. */
+export const photoPath = (userId: string, bookingId: string, fileName: string) => `${userId}/${bookingId}/${fileName.replace(/[^A-Za-z0-9._-]/g, '-')}`;
 
 // ------------------------------------------------------------------ cliente HTTP
 export class ApiClientError extends Error {
@@ -195,6 +203,8 @@ export function createClient(opts: ClientOptions) {
     register: (b: { role: 'client' | 'professional'; full_name: string; accepted_terms_version: string; email?: string; client_kind?: 'person' | 'company'; cnpj?: string }) =>
       call<Me>('POST', '/v1/me/register', b),
     categories: () => call<{ items: Category[] }>('GET', '/v1/categories').then((r) => r.items),
+    /** Exclui a conta (anonimiza os dados). Bloqueado com pedido em andamento. */
+    deleteAccount: () => call<{ deleted: boolean }>('DELETE', '/v1/me'),
 
     // cliente
     addresses: () => call<{ items: Address[] }>('GET', '/v1/client/addresses').then((r) => r.items),

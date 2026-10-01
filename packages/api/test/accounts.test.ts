@@ -208,3 +208,60 @@ describe('regras de acesso por perfil', () => {
     expect((await call(app, 'GET', '/v1/me', CLIENT_AUTH)).status).toBe(401);
   });
 });
+
+describe('exclusão da conta', () => {
+  const profile = { lat: -20.275, lng: -40.28, radius_km: 10, pix_key: '12345678901' };
+
+  it('anonimiza os dados, bloqueia o login e mantém o histórico', async () => {
+    await registerClient({ email: 'dona@lucia.com' });
+    await call(app, 'POST', '/v1/client/addresses', CLIENT_AUTH, { street: 'Rua das Flores', number: '120', city: 'Vitória', state: 'ES', ...ADDRESS_LOC });
+    const r = await call(app, 'DELETE', '/v1/me', CLIENT_AUTH);
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ deleted: true });
+
+    const u = (await sql`SELECT full_name, phone, email, cpf, status, deleted_at FROM users WHERE id = ${CLIENT_AUTH}`)[0]!;
+    expect(u).toMatchObject({ full_name: 'Usuário removido', email: null, cpf: null, status: 'deleted' });
+    expect(u.phone).toMatch(/^removido:/);
+    expect(u.deleted_at).not.toBeNull();
+    expect((await sql`SELECT street, number FROM addresses WHERE client_id = ${CLIENT_AUTH}`)[0]).toMatchObject({ street: 'removido', number: null });
+    expect((await sql`SELECT action FROM audit_logs WHERE entity_id = ${CLIENT_AUTH}`)[0]!.action).toBe('user.deleted');
+    // depois de excluir, não entra mais
+    expect((await call(app, 'GET', '/v1/me', CLIENT_AUTH)).status).toBe(401);
+  });
+
+  it('profissional some da busca e perde os dados pessoais', async () => {
+    await registerPro();
+    await call(app, 'PUT', '/v1/professional/profile', PRO_AUTH, { ...profile, bio: 'Pintor há 12 anos' });
+    await call(app, 'POST', `/v1/admin/kyc/${PRO_AUTH}/decision`, admin, { decision: 'approve' });
+    await call(app, 'PUT', '/v1/professional/status', PRO_AUTH, { visible: true });
+    expect((await call(app, 'DELETE', '/v1/me', PRO_AUTH)).status).toBe(200);
+    expect((await sql`SELECT visible, bio, pix_key FROM professional_profiles WHERE user_id = ${PRO_AUTH}`)[0]).toMatchObject({ visible: false, bio: null, pix_key: 'removido' });
+  });
+
+  it('não exclui com pedido em andamento; libera depois de cancelado', async () => {
+    await registerClient();
+    await registerPro();
+    await call(app, 'PUT', '/v1/professional/profile', PRO_AUTH, profile);
+    await call(app, 'PUT', '/v1/professional/offers/pintor', PRO_AUTH, { daily_rate_cents: 20000 });
+    await call(app, 'PUT', `/v1/professional/availability/${DAY}`, PRO_AUTH, { start_time: '06:00', end_time: '20:00' });
+    await call(app, 'POST', `/v1/admin/kyc/${PRO_AUTH}/decision`, admin, { decision: 'approve' });
+    await call(app, 'PUT', '/v1/professional/status', PRO_AUTH, { visible: true });
+    const addr = await call(app, 'POST', '/v1/client/addresses', CLIENT_AUTH, { street: 'Rua das Flores', city: 'Vitória', state: 'ES', ...ADDRESS_LOC });
+    const b = await call(app, 'POST', '/v1/bookings', CLIENT_AUTH, { professional_id: PRO_AUTH, category: 'pintor', address_id: addr.json.id, date: DAY, start_time: '08:00', duration_minutes: 480, description: 'Pintar sala e corredor.' });
+
+    const blocked = await call(app, 'DELETE', '/v1/me', CLIENT_AUTH);
+    expect(blocked.status).toBe(409);
+    expect(blocked.json.error.code).toBe('open_bookings');
+    expect(blocked.json.error.details.codes).toHaveLength(1);
+    expect((await call(app, 'DELETE', '/v1/me', PRO_AUTH)).json.error.code).toBe('open_bookings'); // o profissional também está no pedido
+
+    await call(app, 'POST', `/v1/bookings/${b.json.id}/cancel`, CLIENT_AUTH, {});
+    expect((await call(app, 'DELETE', '/v1/me', CLIENT_AUTH)).status).toBe(200);
+    expect((await sql`SELECT code FROM bookings WHERE id = ${b.json.id}`)[0]!.code).toBe(b.json.code); // histórico preservado
+  });
+
+  it('admin não se exclui pela API e sem login não há exclusão', async () => {
+    expect((await call(app, 'DELETE', '/v1/me', admin)).status).toBe(403);
+    expect((await call(app, 'DELETE', '/v1/me', null)).status).toBe(401);
+  });
+});

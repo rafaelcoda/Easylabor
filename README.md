@@ -13,10 +13,10 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 | `packages/core` | Regras de negócio puras em TypeScript: preço, antecipação, máquina de estados do pedido, cancelamento e no-show, check-in por GPS, ranking, ledger em partidas dobradas, prazos. **44 testes passando.** |
 | `db/migrations` | Esquema PostgreSQL + PostGIS com as 27 tabelas da especificação, travas de integridade (horários sobrepostos, ledger balanceado, tabelas só de inserção). **15 testes SQL passando.** |
 | Banco na nuvem | Projeto **EasyLabor** no Supabase (região São Paulo, `sa-east-1`) com o esquema, o RLS e o seed aplicados. Ver seção abaixo. |
-| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **9 testes passando.** |
+| `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **10 testes passando.** |
 | `apps/panel` | Painel web da operação (Next.js). Compila. |
 | `apps/mobile` | App em Expo (cliente e profissional). Tipos ok e empacotamento Android ok; **não testado em aparelho**. |
-| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **70 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
+| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **83 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
 | `netlify/` | Função que expõe a API na Netlify (`handler.ts` + `functions/api.mts`). Site `easylabor-api` ligado ao GitHub. |
 
 
@@ -64,9 +64,14 @@ no armazenamento seguro do aparelho.
 
 - Rodar: `cd apps/mobile && npm install && npx expo start` e abrir no app **Expo Go** (celular na mesma rede).
 - Conferir o empacotamento: `npm run bundle-check` (gera o pacote Android sem precisar de aparelho).
-- **Ainda não existe:** envio de fotos no check-out (precisa de armazenamento de arquivos), pagamento, chat, avaliações e
-  notificações push. As telas avisam isso ao usuário.
-- Publicar nas lojas exige conta de desenvolvedor (Apple e Google) e o serviço de build da Expo (EAS); fica para depois.
+- **Ainda não existe:** pagamento, chat, avaliações e notificações push. As telas avisam isso ao usuário.
+- **Fotos do serviço:** o profissional fotografa o resultado (câmera), a foto vai para um bucket **privado** do Supabase Storage
+  (`booking-photos`) e o check-out só aceita fotos que realmente existem no armazenamento, dentro da pasta dele e do pedido.
+  Cliente, profissional e operação veem as fotos por endereços temporários. As regras de acesso estão no banco
+  (`db/migrations/0004_booking_photos.sql`).
+- **Excluir conta:** Conta > Excluir minha conta (exigência das lojas e da LGPD).
+- **Lojas:** veja `docs/lojas/` (checklist, ficha da loja e rascunhos de política de privacidade e termos de uso). O app já tem
+  `eas.json` (builds `preview` em APK, e `production`). O ícone e o nome são provisórios.
 
 ## API (`packages/api`)
 

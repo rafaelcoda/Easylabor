@@ -1,7 +1,8 @@
 import * as Location from 'expo-location';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
+import { PhotoGrid } from '../../components/PhotoGrid';
 import { Back, Button, Card, ErrorText, Loading, Muted, Screen, StatusBadge, Title } from '../../components/ui';
 import { errorMessage, formatBRL, type ActionName, type Booking } from '../../lib/client';
 import { dateBR, timeSP } from '../../lib/format';
@@ -13,6 +14,7 @@ const ACTIONS: { key: string; route: ActionName; label: string; kind: 'primary' 
   { key: 'decline', route: 'decline', label: 'Recusar', kind: 'secondary' },
   { key: 'en_route', route: 'en-route', label: 'Estou a caminho', kind: 'primary' },
   { key: 'check_in', route: 'check-in', label: 'Fazer check-in no local', kind: 'primary' },
+  { key: 'check_out', route: 'check-out', label: 'Encerrar serviço (enviar fotos)', kind: 'primary' },
   { key: 'approve', route: 'approve', label: 'Aprovar serviço', kind: 'primary' },
   { key: 'no_show_client', route: 'report-client-no-show', label: 'Cliente ausente', kind: 'danger' },
   { key: 'cancel_by_client', route: 'cancel', label: 'Cancelar pedido', kind: 'danger' },
@@ -21,6 +23,7 @@ const ACTIONS: { key: string; route: ActionName; label: string; kind: 'primary' 
 
 export default function PedidoDetalhe() {
   const { api, state } = useSession();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const b = useLoad(() => api.booking(id), [api, id]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -28,6 +31,7 @@ export default function PedidoDetalhe() {
   const isPro = state.status === 'ready' && state.me.role === 'professional';
 
   const run = async (a: (typeof ACTIONS)[number], booking: Booking) => {
+    if (a.route === 'check-out') return router.push({ pathname: '/checkout', params: { id: booking.id, category: booking.category } });
     setBusy(a.key); setMsg(null);
     try {
       let body: Record<string, unknown> = {};
@@ -78,8 +82,11 @@ export default function PedidoDetalhe() {
         )}
         {x.payment && !isPro && <Muted>Pagamento: {x.payment.status === 'pending' ? 'ainda não disponível nesta versão' : x.payment.status}</Muted>}
       </Card>
-      {x.available_actions.includes('check_out') && (
-        <Card><Muted>Para encerrar o serviço é preciso enviar fotos do resultado. Esse envio será liberado na próxima versão do app.</Muted></Card>
+      {x.photos.length > 0 && (
+        <Card>
+          <Text style={{ fontWeight: '700' }}>Fotos do resultado</Text>
+          <PhotoGrid keys={x.photos.map((p) => p.key)} />
+        </Card>
       )}
       <ErrorText>{msg}</ErrorText>
       {buttons.map((a) => <Button key={a.key} label={a.label} kind={a.kind} busy={busy === a.key} disabled={busy !== null} onPress={() => run(a, x)} />)}

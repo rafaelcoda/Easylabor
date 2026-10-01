@@ -1,13 +1,26 @@
 import 'react-native-url-polyfill/auto';
 import { createClient as createSupabase, type Session } from '@supabase/supabase-js';
+import { decode } from 'base64-arraybuffer';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { createClient, type ApiClient, type Me } from './client';
+import { PHOTO_BUCKET, createClient, type ApiClient, type Me } from './client';
 import { API_URL, SUPABASE_KEY, SUPABASE_URL } from './config';
 import { secureStorage } from './storage';
 
 const supabase = createSupabase(SUPABASE_URL, SUPABASE_KEY, {
   auth: { storage: secureStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
 });
+
+/** Envia uma foto (em base64) para o bucket privado. Devolve a mensagem de erro, ou null se deu certo. */
+export async function uploadBookingPhoto(path: string, base64: string, contentType = 'image/jpeg'): Promise<string | null> {
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, decode(base64), { contentType, upsert: false });
+  return error ? error.message : null;
+}
+
+/** Endereço temporário (1 hora) para exibir uma foto privada. */
+export async function signedPhotoUrl(path: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(path, 3600);
+  return error ? null : data.signedUrl;
+}
 
 export type State =
   | { status: 'loading' }

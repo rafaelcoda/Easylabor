@@ -105,6 +105,7 @@ async function toView(tx: Sql, b: BookingRow, user: AuthUser) {
       FROM payments WHERE booking_id = ${b.id} ORDER BY created_at DESC LIMIT 1`;
     payment = p[0] ?? null;
   }
+  const photos = await tx`SELECT file_key, created_at FROM booking_attachments WHERE booking_id = ${b.id} AND kind = 'checkout_photo' ORDER BY created_at, file_key`;
   const q = quoteOf(b);
   return {
     id: b.id,
@@ -130,6 +131,7 @@ async function toView(tx: Sql, b: BookingRow, user: AuthUser) {
     accept_deadline_at: b.accept_deadline_at?.toISOString() ?? null,
     auto_approve_at: b.auto_approve_at?.toISOString() ?? null,
     payment,
+    photos: photos.map((p) => ({ key: p.file_key as string, at: (p.created_at as Date).toISOString() })),
     available_actions: availableActions(b.status, actor),
     timeline: events.map((e) => ({ type: e.type, to_status: e.to_status, at: (e.created_at as Date).toISOString() })),
     version: b.version,
@@ -355,9 +357,16 @@ export async function applyAction(ctx: Ctx, req: ActionRequest) {
         break;
       }
       case 'check_out': {
-        const keys = (body.photo_keys as string[] | undefined) ?? [];
+        const keys = [...new Set((body.photo_keys as string[] | undefined) ?? [])];
+        // Cada foto precisa estar na pasta do profissional e deste pedido: <usuário>/<pedido>/<arquivo>
+        const valid = new RegExp(`^${viewer.id}/${b.id}/[A-Za-z0-9._-]{1,120}$`, 'i');
+        if (keys.some((k) => !valid.test(k))) throw unprocessable('invalid_photo_key', 'Uma das fotos não pertence a este serviço');
         if (keys.length < b.min_photos_checkout) {
           throw unprocessable('not_enough_photos', `Envie ao menos ${b.min_photos_checkout} foto(s) do resultado`, { required: b.min_photos_checkout });
+        }
+        if (ctx.verifyPhotoUploads) {
+          const found = await tx`SELECT name FROM storage.objects WHERE bucket_id = 'booking-photos' AND name = ANY(${keys})`;
+          if (found.length !== keys.length) throw unprocessable('photo_not_uploaded', 'Alguma foto não terminou de ser enviada. Tente de novo.');
         }
         const lat = Number(body.lat);
         const lng = Number(body.lng);
