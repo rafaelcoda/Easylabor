@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { STATUS_LABEL, formatBRL, type BookingStatus } from '../../../../../packages/client/src';
+import { categoryName, STATUS_LABEL, formatBRL, type BookingStatus } from '../../../../../packages/client/src';
 import { Shell } from '@/components/Shell';
 import { StatusBadge, useLoad } from '@/components/ui';
 import { timeSP } from '@/lib/format';
@@ -34,7 +34,7 @@ export default function Pedidos() {
                 <tr key={b.id}>
                   <td><b>{b.code}</b></td>
                   <td>{new Date(Date.parse(b.starts_at) - 3 * 3_600_000).toISOString().slice(0, 10).split('-').reverse().join('/')} {timeSP(b.starts_at)}</td>
-                  <td>{b.category}</td><td>{b.professional_name}</td><td>{b.client_name}</td><td>{formatBRL(b.total_cents)}</td><td><StatusBadge status={b.status} /></td>
+                  <td>{categoryName(b.category)}</td><td>{b.professional_name}</td><td>{b.client_name}</td><td>{formatBRL(b.total_cents)}</td><td><StatusBadge status={b.status} /></td>
                 </tr>
               ))}
             </tbody>

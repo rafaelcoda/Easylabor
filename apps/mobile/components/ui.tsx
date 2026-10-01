@@ -27,11 +27,11 @@ export function Button({ label, onPress, kind = 'primary', disabled, busy }: { l
   );
 }
 
-export function Field({ label, ...rest }: { label: string } & TextInputProps) {
+export function Field({ label, style, ...rest }: { label: string } & TextInputProps) {
   return (
     <View style={{ gap: 6 }}>
       <Text style={s.label}>{label}</Text>
-      <TextInput accessibilityLabel={label} placeholderTextColor={C.muted} style={s.input} {...rest} />
+      <TextInput accessibilityLabel={label} placeholderTextColor={C.muted} {...rest} style={[s.input, style]} />
     </View>
   );
 }

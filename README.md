@@ -57,8 +57,7 @@ estado) e **Verificação** (aprovar ou reprovar profissionais). Só entra quem 
 
 ## App móvel (`apps/mobile`)
 
-Expo SDK 57 (React Native) com Expo Router. **Cliente:** login por telefone, cadastro, endereços (com GPS), busca de
-profissionais, solicitação, lista e detalhe dos pedidos (cancelar, aprovar). **Profissional:** cadastro em três blocos (perfil,
+Expo SDK 57 (React Native) com Expo Router. **Cliente:** login por telefone, cadastro, endereços (com GPS), tela **Explorar** (busca com localização e dia, categorias em carrossel e vitrine de profissionais com selo de disponibilidade, nota, distância e valor), solicitação, lista e detalhe dos pedidos (cancelar, aprovar). **Profissional:** cadastro em três blocos (perfil,
 serviço e valor, agenda), botão "disponível", pedidos recebidos (aceitar, recusar, a caminho, check-in com GPS). A sessão fica
 no armazenamento seguro do aparelho.
 

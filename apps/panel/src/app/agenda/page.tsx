@@ -5,7 +5,7 @@ import { Shell } from '@/components/Shell';
 import { DayPicker, useLoad } from '@/components/ui';
 import { dayLabel, hoursInDay, timeSP, today } from '@/lib/format';
 import { toneOf } from '@/lib/format';
-import { STATUS_LABEL, type ScheduleSlot } from '../../../../../packages/client/src';
+import { categoryName, STATUS_LABEL, type ScheduleSlot } from '../../../../../packages/client/src';
 import { useSession } from '@/lib/session';
 
 const START = 6;
@@ -64,7 +64,7 @@ export default function Agenda() {
             <tbody>
               {sc.data.pending.map((b) => (
                 <tr key={b.id}>
-                  <td><b>{b.code}</b></td><td>{b.category}</td><td>{timeSP(b.starts_at)}–{timeSP(b.ends_at)}</td>
+                  <td><b>{b.code}</b></td><td>{categoryName(b.category)}</td><td>{timeSP(b.starts_at)}–{timeSP(b.ends_at)}</td>
                   <td>{b.professional_name}</td><td>{b.attempt} de 3</td><td>{b.accept_deadline_at ? timeSP(b.accept_deadline_at) : 'aguarda pagamento'}</td>
                 </tr>
               ))}

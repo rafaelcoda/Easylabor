@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { PhotoGrid } from '../../components/PhotoGrid';
 import { Back, Button, Card, ErrorText, Loading, Muted, Screen, StatusBadge, Title } from '../../components/ui';
-import { errorMessage, formatBRL, type ActionName, type Booking } from '../../lib/client';
+import { PAYMENT_STATUS_LABEL, categoryName, errorMessage, eventLabel, formatBRL, type ActionName, type Booking } from '../../lib/client';
 import { dateBR, timeSP } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { useLoad } from '../../lib/useLoad';
@@ -62,7 +62,7 @@ export default function PedidoDetalhe() {
       <Title>{x.code}</Title>
       <StatusBadge status={x.status} />
       <Card>
-        <Text style={{ fontWeight: '700' }}>{x.category}</Text>
+        <Text style={{ fontWeight: '700' }}>{categoryName(x.category)}</Text>
         <Muted>{dateBR(x.starts_at)} · {timeSP(x.starts_at)} às {timeSP(x.ends_at)}</Muted>
         <Text>{x.description}</Text>
       </Card>
@@ -80,7 +80,7 @@ export default function PedidoDetalhe() {
         ) : (
           <Text style={{ fontWeight: '800', fontSize: 18 }}>Total {formatBRL(x.amounts.total_cents)}</Text>
         )}
-        {x.payment && !isPro && <Muted>Pagamento: {x.payment.status === 'pending' ? 'ainda não disponível nesta versão' : x.payment.status}</Muted>}
+        {x.payment && !isPro && <Muted>Pagamento: {x.payment.status === 'pending' ? 'ainda não disponível nesta versão' : (PAYMENT_STATUS_LABEL[x.payment.status] ?? x.payment.status)}</Muted>}
       </Card>
       {x.photos.length > 0 && (
         <Card>
@@ -92,7 +92,7 @@ export default function PedidoDetalhe() {
       {buttons.map((a) => <Button key={a.key} label={a.label} kind={a.kind} busy={busy === a.key} disabled={busy !== null} onPress={() => run(a, x)} />)}
       <Text style={{ fontWeight: '700', marginTop: 8 }}>Histórico</Text>
       <View style={{ gap: 4 }}>
-        {x.timeline.map((t, i) => <Muted key={i}>{dateBR(t.at)} {timeSP(t.at)} · {t.type.replace('booking.', '')}</Muted>)}
+        {x.timeline.map((t, i) => <Muted key={i}>{dateBR(t.at)} {timeSP(t.at)} · {eventLabel(t.type)}</Muted>)}
       </View>
     </Screen>
   );

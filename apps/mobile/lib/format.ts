@@ -14,3 +14,20 @@ export function reaisToCents(text: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
   return Math.round(parseFloat(t) * 100);
 }
+
+const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+/** "qui, 02/10" a partir de AAAA-MM-DD, sem depender de Intl. */
+export function dayLabel(day: string): string {
+  const d = new Date(`${day}T12:00:00Z`);
+  const [, m, dd] = day.split('-');
+  return `${DIAS[d.getUTCDay()]}, ${dd}/${m}`;
+}
+/** "Amanhã", "Hoje" ou "qui, 02/10". */
+export function dayName(day: string, today: string): string {
+  if (day === today) return 'Hoje';
+  if (day === addDays(today, 1)) return 'Amanhã';
+  return dayLabel(day);
+}
+/** Minúsculas e sem acentos, para comparar o que a pessoa digitou. */
+export const plain = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+export const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');

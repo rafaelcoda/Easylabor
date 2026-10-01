@@ -262,6 +262,44 @@ export const STATUS_LABEL: Record<BookingStatus, string> = {
   no_show_client: 'Cliente ausente',
 };
 
+/** Nome do serviço para exibição: "ajudante-geral" vira "Ajudante geral". */
+export const categoryName = (slug: string) => {
+  const t = slug.replace(/-/g, ' ');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
+
+export const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  pending: 'aguardando pagamento',
+  paid: 'pago',
+  released: 'liberado ao profissional',
+  refunded: 'reembolsado',
+  partially_refunded: 'reembolsado em parte',
+  failed: 'falhou',
+  expired: 'expirou',
+};
+
+/** Texto do histórico do pedido, a partir do tipo do evento (ex.: "booking.check_in"). */
+export const EVENT_LABEL: Record<string, string> = {
+  created: 'Pedido criado',
+  payment_confirmed: 'Pagamento confirmado',
+  payment_expired: 'Pagamento não realizado',
+  accept: 'Aceito pelo profissional',
+  decline: 'Recusado pelo profissional',
+  accept_deadline_expired: 'Prazo de aceite encerrado',
+  resent: 'Enviado a outro profissional',
+  en_route: 'Profissional a caminho',
+  check_in: 'Chegada confirmada',
+  check_out: 'Serviço concluído',
+  approve: 'Serviço aprovado',
+  dispute: 'Serviço contestado',
+  cancel_by_client: 'Cancelado pelo cliente',
+  cancel_by_professional: 'Cancelado pelo profissional',
+  no_show_professional: 'Profissional não compareceu',
+  no_show_client: 'Cliente ausente',
+  payout_paid: 'Repasse realizado',
+};
+export const eventLabel = (type: string) => EVENT_LABEL[type.replace(/^booking\./, '')] ?? type.replace(/^booking\./, '').replace(/_/g, ' ');
+
 /** Mensagem pronta para mostrar ao usuário a partir de qualquer erro. */
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiClientError) return e.message;

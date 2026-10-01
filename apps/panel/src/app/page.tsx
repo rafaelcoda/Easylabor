@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { formatBRL } from '../../../../packages/client/src';
+import { categoryName, formatBRL } from '../../../../packages/client/src';
 import { Shell } from '@/components/Shell';
 import { DayPicker, StatusBadge, useLoad } from '@/components/ui';
 import { dayLabel, timeSP, today } from '@/lib/format';
@@ -35,7 +35,7 @@ export default function Dashboard() {
             <tbody>
               {list.data.map((b) => (
                 <tr key={b.id}>
-                  <td><b>{b.code}</b></td><td>{b.category}</td><td>{b.professional_name}{b.attempt > 1 ? ` · tentativa ${b.attempt}` : ''}</td>
+                  <td><b>{b.code}</b></td><td>{categoryName(b.category)}</td><td>{b.professional_name}{b.attempt > 1 ? ` · tentativa ${b.attempt}` : ''}</td>
                   <td>{b.client_name}</td><td>{timeSP(b.starts_at)}–{timeSP(b.ends_at)}</td><td>{formatBRL(b.total_cents)}</td><td><StatusBadge status={b.status} /></td>
                 </tr>
               ))}

@@ -52,6 +52,7 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 ## Antes de abrir ao público
 - Apagar `public/teste-interno.html` (página de teste) e os números de teste com código fixo do Supabase Auth.
 - Proteger ou remover o diagnóstico `GET /health?db=1`.
+- Desligar `DEMO_AVATARES` em `apps/mobile/lib/config.ts` (ilustrações de demonstração nos cartões) quando houver foto de perfil de verdade.
 
 ## Pendências principais
 1. Confirmar que `/v1/categories` responde em produção (conexão com o banco).

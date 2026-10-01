@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, createClient, errorMessage, formatBRL, photoPath } from '../src';
+import { ApiClientError, PHOTO_BUCKET, STATUS_LABEL, categoryName, createClient, eventLabel, PAYMENT_STATUS_LABEL, errorMessage, formatBRL, photoPath } from '../src';
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const make = (impl: (url: string, init: RequestInit) => Response | Promise<Response>, token: string | null = 'tok') => {
@@ -76,5 +76,14 @@ describe('cliente da API', () => {
     expect(photoPath('u1', 'b1', 'foto 1.jpg')).toBe('u1/b1/foto-1.jpg');
     expect(photoPath('u1', 'b1', '../x.jpg')).toBe('u1/b1/..-x.jpg');
     expect(photoPath('u1', 'b1', 'a/b.jpg')).not.toContain('a/b');
+  });
+
+  it('traduz serviço, pagamento e histórico para exibição', () => {
+    expect(categoryName('pintor')).toBe('Pintor');
+    expect(categoryName('ajudante-geral')).toBe('Ajudante geral');
+    expect(PAYMENT_STATUS_LABEL.paid).toBe('pago');
+    expect(eventLabel('booking.check_in')).toBe('Chegada confirmada');
+    expect(eventLabel('booking.created')).toBe('Pedido criado');
+    expect(eventLabel('booking.algo_novo')).toBe('algo novo'); // tipo desconhecido não quebra
   });
 });

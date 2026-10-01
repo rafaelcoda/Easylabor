@@ -2,7 +2,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Switch, Text, View } from 'react-native';
 import { Button, Card, ErrorText, Loading, Muted, Screen, StatusBadge, Title } from '../../components/ui';
-import { errorMessage, formatBRL } from '../../lib/client';
+import { categoryName, errorMessage, formatBRL } from '../../lib/client';
 import { dateBR, timeSP } from '../../lib/format';
 import { useSession } from '../../lib/session';
 import { C } from '../../lib/theme';
@@ -67,7 +67,7 @@ export default function ProInicio() {
       {list.data?.length === 0 && <Muted>Nenhum pedido novo no momento.</Muted>}
       {list.data?.map((b) => (
         <Card key={b.id} onPress={() => router.push(`/pedido/${b.id}`)}>
-          <Text style={{ fontWeight: '800' }}>{b.category} · {b.district ?? 'bairro não informado'}</Text>
+          <Text style={{ fontWeight: '800' }}>{categoryName(b.category)} · {b.district ?? 'bairro não informado'}</Text>
           <Muted>{dateBR(b.starts_at)} · {timeSP(b.starts_at)} às {timeSP(b.ends_at)}</Muted>
           <Text style={{ fontWeight: '800', fontSize: 18 }}>{formatBRL(b.amounts.professional_net_cents)}</Text>
           <StatusBadge status={b.status} />
