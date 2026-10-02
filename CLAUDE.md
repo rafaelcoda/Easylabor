@@ -58,6 +58,8 @@ e o plano das sprints. Este arquivo resume como trabalhar no repositório.
 - Credenciais só em variáveis secretas do Netlify (`EASY365_CLIENT_ID`/`EASY365_CLIENT_SECRET`). Nunca em código, arquivo, log ou chat. Preferir uma credencial de serviço própria da integração, com acesso só aos contratos necessários.
 - Salário e ficha médica ficam em `collaborator_private` e não podem ser expostos por nenhuma rota sem decisão explícita (LGPD: dado sensível e finalidade diferente).
 - A API não devolve telefone: o vínculo com a conta do profissional é feito pela operação (celular informado no painel).
+- Colaborador e profissional são tratados como a mesma pessoa no painel: uma só lista (`services/people.ts`). Ao criar filtros novos na lista de profissionais, decida se valem também para colaboradores sem conta (em geral não: filtros de verificação, conta, visibilidade e serviço os excluem).
+- Busca por telefone só vale quando o texto parece um telefone (`phoneDigits`); texto com número, como "Maria 2", busca só por nome.
 
 ## Fotos (Supabase Storage)
 - Bucket privado `booking-photos`; caminho obrigatório `<usuário>/<pedido>/<arquivo>` (função `photoPath` em `packages/client`).

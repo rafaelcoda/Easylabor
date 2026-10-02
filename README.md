@@ -16,7 +16,7 @@ Documentação de produto: PRD, especificação técnica, protótipo e guia de e
 | `packages/client` | Cliente tipado da API, compartilhado pelo app e pelo painel. **16 testes passando.** |
 | `apps/panel` | Painel web da operação (Next.js). Compila. |
 | `apps/mobile` | App em Expo (cliente e profissional). Tipos ok e empacotamento Android ok; **não testado em aparelho**. |
-| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **168 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
+| `packages/api` | API em TypeScript (Hono + PostgreSQL): busca, cotação, pedido completo até o repasse, cancelamento. **177 testes de integração passando** contra um PostgreSQL real (inclui a função da Netlify). |
 | `netlify/` | Função que expõe a API na Netlify (`handler.ts` + `functions/api.mts`). Site `easylabor-api` ligado ao GitHub. |
 
 
@@ -47,10 +47,11 @@ As faixas de preço das categorias no seed são **placeholders**: substituir pel
 
 Next.js (exportação estática) que fala direto com a API e com o Supabase Auth. Telas: **Painel ao vivo** (indicadores do dia e
 pedidos), **Agenda** (profissionais x pedidos por hora, mais as ofertas aguardando aceite), **Pedidos** (filtros por dia e
-estado), **Profissionais** (lista com filtros por verificação, serviço e visibilidade; detalhe com desempenho, advertências, pedidos e
-histórico; aprovar, reprovar, ocultar da busca, suspender e reativar), **Clientes** (lista e detalhe com pedidos, valor contratado e
+estado), **Profissionais** (lista única, com filtros por verificação, serviço, visibilidade e origem; mostra as contas e também os
+colaboradores do Protheus convidados que ainda não entraram, e o filtro "Base Protheus" lista quem ainda pode ser convidado;
+detalhe com desempenho, advertências, pedidos, dados do Protheus e histórico; aprovar, reprovar, ocultar da busca, suspender e reativar), **Clientes** (lista e detalhe com pedidos, valor contratado e
 suspensão), **Verificação** (fila de aprovação) e **Plataforma** (indicadores e filas de atenção, serviços e faixas de diária,
-parâmetros de negócio editáveis e registro de auditoria) e **Equipe** (membros, níveis de acesso e convites) e **Colaboradores** (carga do Protheus, vínculo com o celular e situação). Só entra quem tem conta de **admin**.
+parâmetros de negócio editáveis e registro de auditoria) e **Equipe** (membros, níveis de acesso e convites) e, em **Plataforma → Integrações**, a carga diária do Protheus (situação, histórico e "Sincronizar agora"). Só entra quem tem conta de **admin**.
 
 - Rodar: `cd apps/panel && npm install && npm run dev` (abre em `http://localhost:3001`).
 - Os endereços públicos (API, Supabase e chave pública) estão em `apps/panel/src/lib/config.ts`. Nenhum segredo.
@@ -103,6 +104,13 @@ Erros seguem o formato `{ error: { code, message, details, request_id } }` da es
 **Ainda não feito na API:** `Idempotency-Key`, reenvio automático ao próximo profissional após recusa ou prazo vencido
 (depende dos jobs da sprint 3), disputa, avaliações, chat, upload de arquivos, cadastro e KYC do profissional,
 antecipação, rotas de admin e webhooks reais do provedor.
+
+**Colaborador e profissional são a mesma pessoa:** o painel tem uma só lista (**Profissionais**). `GET /v1/admin/professionals` junta, numa
+consulta só (paginação e contagens certas), as contas de profissional e os colaboradores convidados que ainda não fizeram o 1º
+acesso (`kind = 'collaborator'`, estado "Aguardando 1º acesso"). A base inteira do Protheus não entra em "Todos" (são centenas de
+pessoas): fica em `view=base` e só mostra quem ainda pode ser convidado (ativo, presente na base, sem convite). Filtros `origin`
+(`protheus` ou `direct`) e `view` (`prereg` ou `base`). A conta continua sendo criada só no primeiro acesso, porque exige um celular
+verificado por SMS e a Easy365 não devolve telefone; por isso o passo é o **convite** (a operação informa o celular).
 
 **Carga diária de colaboradores (Easy365/Protheus):** a função agendada (`jobs`, a cada 5 min) chama a API Easy365 (`GET /collaborators`)
 e grava em `collaborators` (um registro por colaborador, chave `external_id`). Autenticação: `POST /auth/login` com `id` e `secret`

@@ -6,8 +6,10 @@ import { spToday } from './accounts';
 import { SETTINGS, applySettings, invalidateConfig, loadConfig, settingByKey } from './settings';
 
 const iso = (d: unknown) => (d instanceof Date ? d.toISOString() : ((d as string | null) ?? null));
-const esc = (q: string) => q.replace(/[\\%_]/g, '\\$&');
-const digits = (q: string) => q.replace(/\D/g, '');
+export const esc = (q: string) => q.replace(/[\\%_]/g, '\\$&');
+export const digits = (q: string) => q.replace(/\D/g, '');
+/** Dígitos para buscar por telefone, mas só quando o texto parece um telefone (só números e símbolos de telefone, 3 dígitos ou mais). */
+export const phoneDigits = (q: string): string | null => (/^[\d\s()+.\-]+$/.test(q) && digits(q).length >= 3 ? digits(q) : null);
 const num = (v: unknown) => Number(v ?? 0);
 /** Identificador fixo das mudanças de parâmetros no registro de auditoria. */
 const CONFIG_ENTITY = '00000000-0000-0000-0000-000000000000';
@@ -33,47 +35,12 @@ export interface ProFilter {
   service?: string;
 }
 
-const proWhere = (sql: Sql, f: ProFilter) => sql`
+export const proWhere = (sql: Sql, f: ProFilter) => sql`
   u.role = 'professional' AND u.status ${f.status ? sql`= ${f.status}` : sql`<> 'deleted'`}
-  ${f.q ? sql`AND (u.full_name ILIKE ${'%' + esc(f.q) + '%'} OR (${digits(f.q)}::text <> '' AND u.phone LIKE ${'%' + digits(f.q) + '%'}))` : sql``}
+  ${f.q ? sql`AND (u.full_name ILIKE ${'%' + esc(f.q) + '%'} ${phoneDigits(f.q) ? sql`OR u.phone LIKE ${'%' + phoneDigits(f.q) + '%'}` : sql``})` : sql``}
   ${f.kyc === 'incomplete' ? sql`AND p.user_id IS NULL` : f.kyc === 'pending' ? sql`AND p.kyc_status IN ('pending', 'in_review')` : f.kyc ? sql`AND p.kyc_status = ${f.kyc}` : sql``}
   ${f.visible !== undefined ? sql`AND p.visible = ${f.visible}` : sql``}
   ${f.service ? sql`AND EXISTS (SELECT 1 FROM service_offers o JOIN service_categories c ON c.id = o.category_id WHERE o.professional_id = u.id AND o.active AND c.slug = ${f.service})` : sql``}`;
-
-export async function adminProfessionals(ctx: Ctx, f: ProFilter, limit: number, offset: number) {
-  const where = proWhere(ctx.sql, f);
-  const rows = await ctx.sql`
-    SELECT u.id, u.full_name, u.phone, u.status, u.created_at,
-           p.user_id IS NOT NULL AS has_profile, p.kyc_status, p.visible, p.radius_km, p.level, p.rating_avg, p.rating_count, p.completed_count,
-           cardinality(p.weekly_days) AS weekly_days,
-           (SELECT coalesce(json_agg(json_build_object('category', c.slug, 'rate_cents', o.daily_rate_cents) ORDER BY c.name), '[]'::json)
-              FROM service_offers o JOIN service_categories c ON c.id = o.category_id WHERE o.professional_id = u.id AND o.active) AS offers,
-           (SELECT count(*)::int FROM strikes s WHERE s.user_id = u.id AND s.expires_at > now()) AS active_strikes,
-           (SELECT count(*)::int FROM bookings b WHERE b.professional_id = u.id) AS bookings_total,
-           EXISTS (SELECT 1 FROM collaborators c WHERE c.user_id = u.id) AS is_collaborator
-    FROM users u LEFT JOIN professional_profiles p ON p.user_id = u.id
-    WHERE ${where} ORDER BY u.created_at DESC, u.id LIMIT ${limit} OFFSET ${offset}`;
-  const total = (await ctx.sql`SELECT count(*)::int AS n FROM users u LEFT JOIN professional_profiles p ON p.user_id = u.id WHERE ${where}`)[0]!.n as number;
-  const s = (await ctx.sql`
-    SELECT count(*)::int AS total,
-           count(*) FILTER (WHERE p.user_id IS NULL AND u.status = 'active')::int AS incomplete,
-           count(*) FILTER (WHERE p.kyc_status IN ('pending', 'in_review') AND u.status = 'active')::int AS pending,
-           count(*) FILTER (WHERE p.kyc_status = 'approved' AND u.status = 'active')::int AS approved,
-           count(*) FILTER (WHERE p.kyc_status = 'rejected' AND u.status = 'active')::int AS rejected,
-           count(*) FILTER (WHERE u.status = 'suspended')::int AS suspended,
-           count(*) FILTER (WHERE p.visible AND u.status = 'active')::int AS visible
-    FROM users u LEFT JOIN professional_profiles p ON p.user_id = u.id WHERE u.role = 'professional' AND u.status <> 'deleted'`)[0]!;
-  return {
-    total,
-    summary: s,
-    items: rows.map((r) => ({
-      id: r.id, full_name: r.full_name, phone: r.phone, status: r.status, created_at: iso(r.created_at),
-      has_profile: r.has_profile, kyc_status: r.kyc_status ?? null, visible: r.visible ?? false, radius_km: r.radius_km ?? null, level: r.level ?? null,
-      rating_avg: num(r.rating_avg), rating_count: num(r.rating_count), completed_count: num(r.completed_count),
-      weekly_days: num(r.weekly_days), offers: r.offers, active_strikes: r.active_strikes, bookings_total: r.bookings_total, is_collaborator: r.is_collaborator,
-    })),
-  };
-}
 
 export async function adminProfessionalDetail(ctx: Ctx, id: string) {
   const u = (await ctx.sql`SELECT id, full_name, phone, email, status, created_at, accepted_terms_version FROM users WHERE id = ${id} AND role = 'professional'`)[0];
@@ -124,7 +91,7 @@ export interface ClientFilter {
 
 const clientWhere = (sql: Sql, f: ClientFilter) => sql`
   u.role = 'client' AND u.status ${f.status ? sql`= ${f.status}` : sql`<> 'deleted'`}
-  ${f.q ? sql`AND (u.full_name ILIKE ${'%' + esc(f.q) + '%'} OR (${digits(f.q)}::text <> '' AND u.phone LIKE ${'%' + digits(f.q) + '%'}) OR u.email ILIKE ${'%' + esc(f.q) + '%'})` : sql``}`;
+  ${f.q ? sql`AND (u.full_name ILIKE ${'%' + esc(f.q) + '%'} ${phoneDigits(f.q) ? sql`OR u.phone LIKE ${'%' + phoneDigits(f.q) + '%'}` : sql``} OR u.email ILIKE ${'%' + esc(f.q) + '%'})` : sql``}`;
 
 export async function adminClients(ctx: Ctx, f: ClientFilter, limit: number, offset: number) {
   const where = clientWhere(ctx.sql, f);

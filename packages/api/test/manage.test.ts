@@ -65,6 +65,8 @@ describe('gestão de profissionais', () => {
     expect(await ids('q=marc')).toEqual(['Marcos S.']);
     expect(await ids('q=0004')).toEqual(['Rafaela T.']); // telefone
     expect(await ids('q=%25')).toEqual([]); // o % é tratado como texto, não como curinga
+    expect(await ids('q=Marcos 2')).toEqual([]); // texto com número não vira busca por telefone
+    expect(await ids('q=(27) 90000-0004')).toEqual(['Rafaela T.']); // telefone com máscara continua valendo
     expect(await ids('q=')).toHaveLength(3); // vazio = sem filtro
     expect((await get('/v1/admin/professionals?kyc=qualquer')).status).toBe(400);
     expect((await get('/v1/admin/professionals?limit=0')).status).toBe(400);

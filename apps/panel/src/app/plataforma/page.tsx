@@ -7,11 +7,12 @@ import {
   type AdminCategory, type AdminSetting, type AuditItem, type PlatformOverview,
 } from '../../../../../packages/client/src';
 import { Shell } from '@/components/Shell';
+import { SyncCard } from '@/components/SyncCard';
 import { Badge, Modal, useLoad } from '@/components/ui';
 import { dateTimeBR, dayShort } from '@/lib/format';
 import { useSession } from '@/lib/session';
 
-type Tab = 'geral' | 'servicos' | 'parametros' | 'auditoria';
+type Tab = 'geral' | 'servicos' | 'parametros' | 'integracoes' | 'auditoria';
 
 const reaisToCents = (t: string): number | null => {
   const v = t.trim().replace(/\./g, '').replace(',', '.');
@@ -228,6 +229,32 @@ function Parametros() {
   );
 }
 
+// ------------------------------------------------------------------ integrações
+function Integracoes() {
+  const { api, state } = useSession();
+  const owner = state.status === 'ready' && state.me.admin_level === 'owner';
+  const d = useLoad(() => api.adminCollaborators({ limit: 1 }), [api]);
+  const s = d.data?.summary;
+  return (
+    <>
+      <div className="notice">
+        <b>Easy365 / Protheus.</b> Traz os colaboradores para dentro da plataforma. Quem é convidado vira profissional no primeiro acesso, e a lista completa fica em <b>Profissionais → Base Protheus</b>.
+      </div>
+      {d.error && <p className="err">{d.error}</p>}
+      {d.data && <SyncCard configured={d.data.sync.configured} last={d.data.sync.last} owner={owner} onChanged={d.reload} />}
+      {s && (
+        <div className="kpis">
+          <div className="card kpi"><div className="l">Colaboradores no Protheus</div><div className="v">{s.total}</div><div className="s">{s.active} ativos</div></div>
+          <div className="card kpi"><div className="l">Já são profissionais</div><div className="v">{s.linked}</div></div>
+          <div className="card kpi"><div className="l">Convidados, aguardando</div><div className="v">{s.waiting}</div></div>
+          <div className="card kpi"><div className="l">Saíram da base</div><div className="v">{s.missing}</div></div>
+        </div>
+      )}
+      <p className="hint">Salário e ficha médica vêm do Protheus, mas ficam guardados à parte e não aparecem em nenhuma tela.</p>
+    </>
+  );
+}
+
 // ------------------------------------------------------------------ auditoria
 function detail(a: AuditItem): string {
   const af = (a.after ?? {}) as Record<string, unknown>;
@@ -263,13 +290,14 @@ function Auditoria() {
 
 export default function Plataforma() {
   const [tab, setTab] = useState<Tab>('geral');
-  const tabs: [Tab, string][] = [['geral', 'Visão geral'], ['servicos', 'Serviços'], ['parametros', 'Parâmetros'], ['auditoria', 'Auditoria']];
+  const tabs: [Tab, string][] = [['geral', 'Visão geral'], ['servicos', 'Serviços'], ['parametros', 'Parâmetros'], ['integracoes', 'Integrações'], ['auditoria', 'Auditoria']];
   return (
-    <Shell title="Gestão da plataforma" subtitle="Indicadores, serviços oferecidos, regras de negócio e registro de ações">
+    <Shell title="Gestão da plataforma" subtitle="Indicadores, serviços, regras de negócio, integrações e registro de ações">
       <div className="seg" role="tablist">{tabs.map(([k, label]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>)}</div>
       {tab === 'geral' && <Geral />}
       {tab === 'servicos' && <Servicos />}
       {tab === 'parametros' && <Parametros />}
+      {tab === 'integracoes' && <Integracoes />}
       {tab === 'auditoria' && <Auditoria />}
     </Shell>
   );

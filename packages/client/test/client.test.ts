@@ -121,6 +121,8 @@ describe('cliente da API', () => {
     expect(f.mock.calls[4]![1].method).toBe('PUT');
     await api.resetConfigValue('client_fee_bps');
     expect(f.mock.calls[5]![1].method).toBe('DELETE');
+    await api.adminProfessionals({ view: 'base', origin: 'protheus' });
+    expect(String(f.mock.calls[6]![0])).toBe('https://api.test/v1/admin/professionals?view=base&origin=protheus');
   });
 
   it('gestão: textos de exibição em português', () => {

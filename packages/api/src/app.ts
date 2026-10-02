@@ -11,9 +11,10 @@ import { createMockProvider } from './payments/provider';
 import { applyAction, createBooking, getBooking, listBookings, redirectOffer } from './services/bookings';
 import { adminBookings, adminOverview, adminSchedule } from './services/admin';
 import {
-  adminAudit, adminCategories, adminClientDetail, adminClients, adminConfig, adminProfessionalDetail, adminProfessionals, createCategory,
+  adminAudit, adminCategories, adminClientDetail, adminClients, adminConfig, adminProfessionalDetail, createCategory,
   platformOverview, resetConfig, setConfig, setProfessionalVisible, setUserStatus, updateCategory,
 } from './services/manage';
+import { adminPeople } from './services/people';
 import { loadConfig } from './services/settings';
 import { adminCollaborators, linkCollaborator, requestSync, syncRuns, unlinkCollaborator } from './services/collaborators';
 import { acceptInvite, inviteMember, listTeam, revokeInvite, setMemberLevel, setMemberStatus } from './services/team';
@@ -69,6 +70,8 @@ const proListQuery = z.object({
   status: z.enum(['active', 'suspended', 'deleted']).optional(),
   visible: z.enum(['true', 'false']).optional(),
   service: z.string().max(60).optional(),
+  origin: z.enum(['protheus', 'direct']).optional(),
+  view: z.enum(['prereg', 'base']).optional(),
 });
 const clientListQuery = z.object({ ...pageQuery, status: z.enum(['active', 'suspended', 'deleted']).optional() });
 const suspendBody = z.object({ reason: z.string().trim().min(3, 'informe o motivo').max(300) });
@@ -348,7 +351,7 @@ export function createApp(deps: Deps) {
   app.get('/v1/admin/professionals', async (c) => {
     needRole(c, 'admin');
     const q = parse(proListQuery, query(c));
-    return c.json(await adminProfessionals(ctx, { q: q.q, kyc: q.kyc, status: q.status, visible: q.visible === undefined ? undefined : q.visible === 'true', service: q.service }, q.limit, q.offset));
+    return c.json(await adminPeople(ctx, { q: q.q, kyc: q.kyc, status: q.status, visible: q.visible === undefined ? undefined : q.visible === 'true', service: q.service, origin: q.origin, view: q.view }, q.limit, q.offset));
   });
   app.get('/v1/admin/professionals/:id', async (c) => {
     needRole(c, 'admin');

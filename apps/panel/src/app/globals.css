@@ -83,3 +83,6 @@ a.plain { color:inherit; text-decoration:none; font-weight:600; } a.plain:hover 
 .kpi .v { white-space:nowrap; font-size:28px; }
 .sub-line.nowrap { white-space:nowrap; }
 .tag { white-space:nowrap; }
+
+.card.scroll { overflow-x:auto; }
+.btn.sm { padding:6px 10px; font-size:13px; white-space:nowrap; }

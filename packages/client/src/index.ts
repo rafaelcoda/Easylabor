@@ -168,15 +168,30 @@ export const photoPath = (userId: string, bookingId: string, fileName: string) =
 export type KycFilter = 'incomplete' | 'pending' | 'approved' | 'rejected';
 export type AccountStatus = 'active' | 'suspended' | 'deleted';
 
+/** Uma linha da lista única: uma conta de profissional, ou um colaborador do Protheus que ainda não entrou no app. */
 export interface AdminProfessionalRow {
-  id: string; full_name: string; phone: string; status: AccountStatus; created_at: string;
+  kind: 'professional' | 'collaborator';
+  /** Id da conta (kind professional) ou do colaborador (kind collaborator). */
+  id: string; full_name: string; phone: string | null; status: AccountStatus | string; created_at: string;
   has_profile: boolean; kyc_status: string | null; visible: boolean; radius_km: number | null; level: string | null;
   rating_avg: number; rating_count: number; completed_count: number; weekly_days: number;
   offers: { category: string; rate_cents: number }[]; active_strikes: number; bookings_total: number; is_collaborator: boolean;
+  collaborator: {
+    id: string; register: string | null; contract: string | null; role: string | null; position: string | null; status: string; hired_on: string | null;
+    missing_since: string | null; link_state: LinkState; link_phone: string | null;
+  } | null;
 }
 export interface AdminProfessionalList {
   total: number;
-  summary: { total: number; incomplete: number; pending: number; approved: number; rejected: number; suspended: number; visible: number };
+  summary: {
+    total: number; incomplete: number; pending: number; approved: number; rejected: number; suspended: number; visible: number;
+    /** Com registro no Protheus (contas vinculadas + convidados que ainda não entraram). */
+    from_protheus: number;
+    /** Colaboradores convidados que ainda não fizeram o 1º acesso. */
+    prereg: number;
+    /** Colaboradores do Protheus ainda sem convite (podem ser convidados). */
+    base: number;
+  };
   items: AdminProfessionalRow[];
 }
 export interface AuditItem {
@@ -283,7 +298,7 @@ export const AUDIT_LABEL: Record<string, string> = {
   'professional.hidden': 'Ocultado da busca', 'professional.shown': 'Exibido na busca', 'kyc.decision': 'Decisão de verificação',
   'team.invited': 'Convite enviado', 'team.invite_revoked': 'Convite cancelado', 'team.invite_accepted': 'Convite aceito', 'team.level_changed': 'Nível de acesso alterado',
   'team.deactivated': 'Acesso desativado', 'team.reactivated': 'Acesso reativado',
-  'collaborator.linked': 'Colaborador vinculado a um celular', 'collaborator.unlinked': 'Vínculo de colaborador removido',
+  'collaborator.linked': 'Colaborador convidado (celular informado)', 'collaborator.unlinked': 'Convite de colaborador cancelado',
   'collaborator.auto_linked': 'Vínculo automático no cadastro do profissional', 'collaborator.auto_hidden': 'Ocultado da busca: colaborador desligado ou fora da base', 'collaborators.sync_requested': 'Carga de colaboradores solicitada',
   'category.created': 'Serviço criado', 'category.updated': 'Serviço alterado', 'config.updated': 'Parâmetro alterado', 'config.reset': 'Parâmetro restaurado ao padrão',
 };
@@ -393,7 +408,7 @@ export function createClient(opts: ClientOptions) {
       call<{ items: AdminBooking[] }>('GET', `/v1/admin/bookings${qs(p)}`).then((r) => r.items),
     adminSchedule: (date?: string) => call<AdminSchedule>('GET', `/v1/admin/schedule${qs({ date })}`),
     // gestão
-    adminProfessionals: (p: { q?: string; kyc?: KycFilter; status?: AccountStatus; visible?: boolean; service?: string; limit?: number; offset?: number } = {}) =>
+    adminProfessionals: (p: { q?: string; kyc?: KycFilter; status?: AccountStatus; visible?: boolean; service?: string; origin?: 'protheus' | 'direct'; view?: 'prereg' | 'base'; limit?: number; offset?: number } = {}) =>
       call<AdminProfessionalList>('GET', `/v1/admin/professionals${qs({ ...p, visible: p.visible === undefined ? undefined : String(p.visible) })}`),
     adminProfessional: (id: string) => call<AdminProfessionalDetail>('GET', `/v1/admin/professionals/${id}`),
     setProfessionalVisible: (id: string, visible: boolean, reason?: string) => call<{ id: string; visible: boolean }>('PUT', `/v1/admin/professionals/${id}/visible`, { visible, reason }),

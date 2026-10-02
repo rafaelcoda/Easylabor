@@ -496,3 +496,112 @@ describe('colaboradores no painel', () => {
     expect((await sql`SELECT user_id, link_phone FROM collaborators WHERE external_id = 'ext-1'`)[0]).toEqual({ user_id: null, link_phone: PHONE });
   });
 });
+
+// ------------------------------------------------------------------ lista única de profissionais
+describe('lista única: profissionais e colaboradores juntos', () => {
+  let app: ReturnType<typeof makeApp>;
+  let f: ReturnType<typeof fake>;
+  const list = (qs = '', who: string | null = w.admin) => call(app, 'GET', `/v1/admin/professionals${qs}`, who);
+  const names = async (qs = '') => (await list(qs)).json.items.map((i: any) => i.full_name).sort();
+  const idOf = async (ext: string) => (await sql`SELECT id FROM collaborators WHERE external_id = ${ext}`)[0]!.id as string;
+
+  beforeEach(async () => {
+    f = fake([[raw(1), raw(2), raw(3, { status: 'FIRED' }), raw(4), raw(5), raw(6)]]);
+    app = makeApp(sql, true, undefined, { easy365: f.client });
+    await doSync(f, { pageSize: 100 });
+    // ext-1 vira o profissional de teste (conta existente); ext-2 é convidado e ainda não entrou
+    await call(app, 'PUT', `/v1/admin/collaborators/${await idOf('ext-1')}/link`, w.admin, { phone: '(27) 90000-0003' });
+    await call(app, 'PUT', `/v1/admin/collaborators/${await idOf('ext-2')}/link`, w.admin, { phone: '(27) 99888-1122' });
+  });
+
+  it('"Todos" mostra as contas de profissional e os colaboradores convidados que ainda não entraram; a base inteira fica de fora', async () => {
+    const r = (await list()).json;
+    expect(r.total).toBe(3);
+    expect(await names()).toEqual(['Colaborador 2', 'Marcos S.', 'Rafaela T.']);
+    expect(r.summary).toMatchObject({ total: 3, approved: 2, visible: 2, prereg: 1, base: 3, from_protheus: 2, suspended: 0, incomplete: 0 });
+  });
+
+  it('cada linha diz de onde vem: conta com registro no Protheus, conta direta, ou colaborador aguardando o 1º acesso', async () => {
+    const items = (await list()).json.items;
+    const by = (n: string) => items.find((i: any) => i.full_name === n);
+    expect(by('Marcos S.')).toMatchObject({
+      kind: 'professional', is_collaborator: true, kyc_status: 'approved', visible: true,
+      collaborator: { register: '000001', contract: 'Contrato A', role: 'Auxiliar', position: 'Operação', status: 'ACTIVE', hired_on: '2022-03-14', link_state: 'linked', link_phone: null },
+    });
+    expect(by('Marcos S.').offers).toEqual([{ category: 'pintor', rate_cents: 20000 }]);
+    expect(by('Rafaela T.')).toMatchObject({ kind: 'professional', is_collaborator: false, collaborator: null });
+    const waiting = by('Colaborador 2');
+    expect(waiting).toMatchObject({
+      kind: 'collaborator', id: await idOf('ext-2'), phone: '+5527998881122', is_collaborator: true, has_profile: false, kyc_status: null, visible: false,
+      rating_count: 0, completed_count: 0, offers: [], bookings_total: 0, active_strikes: 0,
+      collaborator: { register: '000002', link_state: 'waiting', link_phone: '+5527998881122' },
+    });
+  });
+
+  it('"Base Protheus" lista só quem ainda pode ser convidado: sem convite, sem conta, ativo e presente na base', async () => {
+    await sql`UPDATE collaborators SET missing_since = now() WHERE external_id = 'ext-6'`;
+    const r = (await list('?view=base')).json;
+    expect(r.items.map((i: any) => i.full_name).sort()).toEqual(['Colaborador 4', 'Colaborador 5']); // 1 e 2 já têm convite/conta, 3 foi desligado, 6 saiu da base
+    expect(r.items.every((i: any) => i.kind === 'collaborator' && i.phone === null && i.collaborator.link_state === 'none')).toBe(true);
+    expect(r.total).toBe(2);
+    expect((await list('?view=prereg')).json.items.map((i: any) => i.full_name)).toEqual(['Colaborador 2']);
+  });
+
+  it('origem: Protheus (com conta ou convidado) ou cadastro direto', async () => {
+    expect(await names('?origin=protheus')).toEqual(['Colaborador 2', 'Marcos S.']);
+    expect(await names('?origin=direct')).toEqual(['Rafaela T.']);
+  });
+
+  it('filtros que só valem para quem tem conta tiram os colaboradores da lista', async () => {
+    for (const qs of ['?kyc=approved', '?visible=true', '?service=pintor', '?status=active']) expect(await names(qs), qs).toEqual(['Marcos S.', 'Rafaela T.']);
+    expect(await names('?kyc=pending')).toEqual([]);
+    expect(await names('?kyc=incomplete')).toEqual([]);
+    expect(await names('?status=suspended')).toEqual([]);
+    expect(await names('?origin=direct&kyc=approved')).toEqual(['Rafaela T.']);
+  });
+
+  it('a busca acha pelo nome, matrícula e celular, e respeita onde a pessoa está', async () => {
+    expect(await names('?q=Colaborador 2')).toEqual(['Colaborador 2']);
+    expect(await names('?q=000002')).toEqual(['Colaborador 2']);
+    expect(await names('?q=99888')).toEqual(['Colaborador 2']);
+    expect(await names('?q=marc')).toEqual(['Marcos S.']);
+    expect(await names('?q=Colaborador 4')).toEqual([]); // está na base, não em "Todos"
+    expect(await names('?view=base&q=Colaborador 4')).toEqual(['Colaborador 4']);
+    expect(await names('?view=base&q=000005')).toEqual(['Colaborador 5']);
+    expect(await names('?q=%25')).toEqual([]);
+  });
+
+  it('a paginação percorre as duas fontes sem repetir nem perder ninguém', async () => {
+    const seen: string[] = [];
+    for (let offset = 0; offset < 4; offset++) {
+      const r = (await list(`?limit=1&offset=${offset}`)).json;
+      expect(r.total).toBe(3);
+      seen.push(...r.items.map((i: any) => `${i.kind}:${i.id}`));
+    }
+    expect(seen).toHaveLength(3);
+    expect(new Set(seen).size).toBe(3);
+  });
+
+  it('quando o convidado faz o 1º acesso, a linha de colaborador dá lugar à conta, sem duplicar', async () => {
+    const AUTH = '55555555-aaaa-4aaa-8aaa-555555555555';
+    const before = (await list()).json;
+    expect(before.items.filter((i: any) => i.full_name === 'Colaborador 2')).toHaveLength(1);
+    await call(app, 'POST', '/v1/me/register', null, { role: 'professional', full_name: 'José Carlos', accepted_terms_version: 'v1' }, asIdentity(AUTH, '5527998881122'));
+    const after = (await list()).json;
+    expect(after.total).toBe(3);
+    expect(after.items.find((i: any) => i.full_name === 'Colaborador 2')).toBeUndefined();
+    expect(after.items.find((i: any) => i.id === AUTH)).toMatchObject({ kind: 'professional', has_profile: false, collaborator: { register: '000002', link_state: 'linked' } });
+    expect(after.summary).toMatchObject({ incomplete: 1, prereg: 0, from_protheus: 2 });
+    expect((await list('?kyc=incomplete')).json.items.map((i: any) => i.id)).toEqual([AUTH]);
+  });
+
+  it('salário e ficha médica não aparecem; acesso e validação', async () => {
+    const text = JSON.stringify([(await list()).json, (await list('?view=base')).json]);
+    expect(text).not.toMatch(/FM-\d|3000\d\d|wage|medical/);
+    expect((await list('', operator)).status).toBe(200);
+    expect((await list('', w.client)).status).toBe(403);
+    expect((await list('', null)).status).toBe(401);
+    expect((await list('?origin=xyz')).status).toBe(400);
+    expect((await list('?view=xyz')).status).toBe(400);
+  });
+});
